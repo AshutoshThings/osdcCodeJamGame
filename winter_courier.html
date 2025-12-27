@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Winter Courier - Frozen City Deliveries</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(to bottom, #0a0a20, #1a1a3e);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        #game { position: relative; }
+        canvas { display: block; border: 3px solid #4fc3f7; border-radius: 8px; }
+        #hud {
+            position: absolute;
+            top: 10px; left: 10px; right: 10px;
+            display: flex;
+            justify-content: space-between;
+            color: #fff;
+            font-size: 14px;
+            pointer-events: none;
+        }
+        .hud-item {
+            background: rgba(0,0,0,0.7);
+            padding: 6px 12px;
+            border-radius: 4px;
+            border: 1px solid #4fc3f7;
+        }
+        #stamina-bar {
+            width: 100px; height: 12px;
+            background: #333; border-radius: 6px;
+            overflow: hidden; margin-top: 4px;
+        }
+        #stamina-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #f44, #ff0, #0f0);
+            transition: width 0.1s;
+        }
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            text-align: center;
+            border-radius: 8px;
+        }
+        .overlay.hidden { display: none; }
+        h1 { color: #4fc3f7; font-size: 36px; margin-bottom: 10px; }
+        h2 { color: #ffd93d; font-size: 18px; margin-bottom: 20px; }
+        .info { max-width: 450px; margin-bottom: 20px; line-height: 1.5; }
+        button {
+            background: linear-gradient(#4fc3f7, #0288d1);
+            border: none; color: #fff;
+            padding: 12px 30px; font-size: 16px;
+            border-radius: 25px; cursor: pointer;
+        }
+        button:hover { transform: scale(1.05); }
+        .key { background: #4fc3f7; color: #000; padding: 2px 6px; border-radius: 3px; font-weight: bold; }
+        #target {
+            position: absolute;
+            top: 55px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: #ffd93d;
+            padding: 5px 15px;
+            border-radius: 15px;
+            border: 1px solid #ffd93d;
+            font-size: 13px;
+        }
+        #target.hidden { display: none; }
+        #minimap {
+            position: absolute;
+            bottom: 10px; right: 10px;
+            border: 2px solid #4fc3f7;
+            border-radius: 4px;
+            background: rgba(0,0,0,0.6);
+        }
+    </style>
+</head>
+<body>
+    <div id="game">
+        <canvas id="c" width="900" height="500"></canvas>
+        <canvas id="minimap" width="160" height="60"></canvas>
+        
+        <div id="hud" class="hidden">
+            <div class="hud-item">Level: <span id="lvl">1</span></div>
+            <div class="hud-item">Score: <span id="scr">0</span></div>
+            <div class="hud-item">📦 <span id="pkg">0</span>/3</div>
+            <div class="hud-item">Deliveries: <span id="del">0</span>/<span id="need">5</span></div>
+            <div class="hud-item">
+                Stamina
+                <div id="stamina-bar"><div id="stamina-fill"></div></div>
+            </div>
+        </div>
+        
+        <div id="target" class="hidden">🏠 <span id="tname">--</span> | <span id="tdist">--</span>m</div>
+        
+        <div id="start" class="overlay">
+            <h1>❄️ Winter Courier ❄️</h1>
+            <h2>Frozen City Deliveries</h2>
+            <div class="info">
+                Navigate the frozen city! Pick up packages from the warehouse and deliver to houses.<br><br>
+                <span class="key">A</span> <span class="key">D</span> Move |
+                <span class="key">W</span> / <span class="key">Space</span> Jump |
+                <span class="key">Shift</span> Sprint<br><br>
+                📦 Yellow = Warehouse | 🏠 Red marker = Needs delivery<br>
+                🧊 Avoid falling ice! | Be fast for bonus points!
+            </div>
+            <button id="startBtn">Start Game</button>
+        </div>
+        
+        <div id="gameover" class="overlay hidden">
+            <h1>❄️ Game Over ❄️</h1>
+            <h2>Final Score: <span id="fscore">0</span></h2>
+            <div class="info">Level <span id="flvl">1</span> | Deliveries: <span id="fdel">0</span></div>
+            <button id="restartBtn">Play Again</button>
+        </div>
+    </div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const mini = document.getElementById('minimap');
+const mctx = mini.getContext('2d');
+
+const W = canvas.width, H = canvas.height;
+const WORLD_W = 3000;
+const GROUND = H - 50;
+
+let state = 'start';
+let level = 1, score = 0, delivered = 0, needed = 5;
+
+// Camera
+let camX = 0;
+
+// Player
+const P = {
+    x: 150, y: GROUND - 45,
+    w: 30, h: 45,
+    vx: 0, vy: 0,
+    stamina: 100,
+    packages: 0,
+    grounded: false,
+    right: true
+};
+
+const GRAV = 0.6, FRIC = 0.88, ACCEL = 0.9, SPRINT = 1.6, MAX_V = 8, JUMP = -13;
+
+// Objects - initialize with defaults
+let warehouse = { x: 80, y: GROUND - 90, w: 120, h: 90, stock: 10 };
+let houses = [];
+let platforms = [];
+let iceBlocks = [];
+let snow = [];
+
+// Initialize objects immediately
+(function initObjects() {
+    const spots = [400, 700, 1000, 1400, 1800, 2200, 2500, 2800];
+    spots.forEach((x, i) => {
+        houses.push({
+            x: x + Math.random() * 100 - 50,
+            y: GROUND - 70,
+            w: 80, h: 70,
+            color: ['#c0392b','#27ae60','#2980b9','#8e44ad','#d35400'][i % 5],
+            needs: false,
+            done: false,
+            name: 'House ' + (i + 1)
+        });
+    });
+    
+    for (let x = 300; x < WORLD_W - 100; x += 250 + Math.random() * 150) {
+        platforms.push({
+            x: x, y: GROUND - 100 - Math.random() * 80,
+            w: 80 + Math.random() * 40, h: 14,
+            moving: Math.random() > 0.5,
+            dir: 1, speed: 1 + Math.random(),
+            start: x, range: 60
+        });
+    }
+    
+    for (let i = 0; i < 14; i++) {
+        iceBlocks.push({
+            x: Math.random() * WORLD_W,
+            y: -Math.random() * 600,
+            size: 15 + Math.random() * 10,
+            speed: 2 + Math.random() * 2,
+            rot: 0
+        });
+    }
+    
+    for (let i = 0; i < 100; i++) {
+        snow.push({
+            x: Math.random() * WORLD_W,
+            y: Math.random() * H,
+            r: 1 + Math.random() * 2,
+            s: 0.5 + Math.random()
+        });
+    }
+})();
+
+function init() {
+    // Warehouse
+    warehouse = { x: 80, y: GROUND - 90, w: 120, h: 90, stock: 10 };
+    
+    // Houses
+    houses = [];
+    const spots = [400, 700, 1000, 1400, 1800, 2200, 2500, 2800];
+    spots.forEach((x, i) => {
+        houses.push({
+            x: x + Math.random() * 100 - 50,
+            y: GROUND - 70,
+            w: 80, h: 70,
+            color: ['#c0392b','#27ae60','#2980b9','#8e44ad','#d35400'][i % 5],
+            needs: false,
+            done: false,
+            name: 'House ' + (i + 1)
+        });
+    });
+    
+    // Platforms
+    platforms = [];
+    for (let x = 300; x < WORLD_W - 100; x += 250 + Math.random() * 150) {
+        platforms.push({
+            x: x, y: GROUND - 100 - Math.random() * 80,
+            w: 80 + Math.random() * 40, h: 14,
+            moving: Math.random() > 0.5,
+            dir: 1, speed: 1 + Math.random(),
+            start: x, range: 60
+        });
+    }
+    
+    // Ice
+    iceBlocks = [];
+    for (let i = 0; i < 12 + level * 2; i++) {
+        iceBlocks.push({
+            x: Math.random() * WORLD_W,
+            y: -Math.random() * 600,
+            size: 15 + Math.random() * 10,
+            speed: 2 + Math.random() * 2 + level * 0.3,
+            rot: 0
+        });
+    }
+    
+    // Snow
+    snow = [];
+    for (let i = 0; i < 100; i++) {
+        snow.push({
+            x: Math.random() * WORLD_W,
+            y: Math.random() * H,
+            r: 1 + Math.random() * 2,
+            s: 0.5 + Math.random()
+        });
+    }
+    
+    // Reset player
+    P.x = 150; P.y = GROUND - 45;
+    P.vx = 0; P.vy = 0;
+    P.stamina = 100; P.packages = 0;
+    
+    delivered = 0;
+    needed = 4 + level * 2;
+    camX = 0;
+    
+    assignDeliveries();
+    updateHUD();
+}
+
+function assignDeliveries() {
+    houses.forEach(h => h.needs = false);
+    const avail = houses.filter(h => !h.done);
+    const n = Math.min(3, avail.length);
+    for (let i = 0; i < n; i++) {
+        const idx = Math.floor(Math.random() * avail.length);
+        avail[idx].needs = true;
+        avail.splice(idx, 1);
+    }
+}
+
+function updateHUD() {
+    document.getElementById('lvl').textContent = level;
+    document.getElementById('scr').textContent = score;
+    document.getElementById('pkg').textContent = P.packages;
+    document.getElementById('del').textContent = delivered;
+    document.getElementById('need').textContent = needed;
+    document.getElementById('stamina-fill').style.width = P.stamina + '%';
+    
+    const t = houses.find(h => h.needs);
+    if (P.packages > 0 && t) {
+        document.getElementById('target').classList.remove('hidden');
+        document.getElementById('tname').textContent = t.name;
+        document.getElementById('tdist').textContent = Math.round(Math.abs(t.x - P.x) / 8);
+    } else {
+        document.getElementById('target').classList.add('hidden');
+    }
+}
+
+// Input
+const keys = {};
+document.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if (['Space','ArrowUp','ArrowDown'].includes(e.code)) e.preventDefault();
+});
+document.addEventListener('keyup', e => keys[e.code] = false);
+
+document.getElementById('startBtn').onclick = startGame;
+document.getElementById('restartBtn').onclick = startGame;
+
+function startGame() {
+    state = 'play';
+    level = 1; score = 0;
+    document.getElementById('start').classList.add('hidden');
+    document.getElementById('gameover').classList.add('hidden');
+    document.getElementById('hud').classList.remove('hidden');
+    init();
+}
+
+function endGame() {
+    state = 'over';
+    document.getElementById('hud').classList.add('hidden');
+    document.getElementById('target').classList.add('hidden');
+    document.getElementById('gameover').classList.remove('hidden');
+    document.getElementById('fscore').textContent = score;
+    document.getElementById('flvl').textContent = level;
+    document.getElementById('fdel').textContent = delivered;
+}
+
+function nextLevel() {
+    level++;
+    score += 500;
+    init();
+}
+
+function update() {
+    if (state !== 'play') return;
+    
+    // Input
+    const sprint = keys['ShiftLeft'] || keys['ShiftRight'];
+    let acc = ACCEL;
+    if (sprint && P.stamina > 0) {
+        acc *= SPRINT;
+        P.stamina -= 0.5;
+    }
+    
+    if (keys['KeyA'] || keys['ArrowLeft']) { P.vx -= acc; P.right = false; }
+    if (keys['KeyD'] || keys['ArrowRight']) { P.vx += acc; P.right = true; }
+    
+    if ((keys['KeyW'] || keys['Space'] || keys['ArrowUp']) && P.grounded && P.stamina >= 8) {
+        P.vy = JUMP;
+        P.grounded = false;
+        P.stamina -= 8;
+    }
+    
+    // Physics
+    P.vx *= FRIC;
+    if (P.vx > MAX_V) P.vx = MAX_V;
+    if (P.vx < -MAX_V) P.vx = -MAX_V;
+    P.vy += GRAV;
+    
+    P.x += P.vx;
+    P.y += P.vy;
+    
+    // Bounds
+    if (P.x < 10) { P.x = 10; P.vx = 0; }
+    if (P.x + P.w > WORLD_W - 10) { P.x = WORLD_W - P.w - 10; P.vx = 0; }
+    
+    // Ground
+    P.grounded = false;
+    if (P.y + P.h >= GROUND) {
+        P.y = GROUND - P.h;
+        P.vy = 0;
+        P.grounded = true;
+    }
+    
+    // Platforms
+    for (const pl of platforms) {
+        if (pl.moving) {
+            pl.x += pl.dir * pl.speed;
+            if (pl.x < pl.start - pl.range || pl.x > pl.start + pl.range) pl.dir *= -1;
+        }
+        if (P.vy >= 0 && P.x + P.w > pl.x && P.x < pl.x + pl.w &&
+            P.y + P.h >= pl.y && P.y + P.h <= pl.y + pl.h + 12) {
+            P.y = pl.y - P.h;
+            P.vy = 0;
+            P.grounded = true;
+            if (pl.moving) P.x += pl.dir * pl.speed;
+        }
+    }
+    
+    // Stamina recovery
+    if (Math.abs(P.vx) < 0.5 && P.grounded && P.stamina < 100) P.stamina += 0.3;
+    
+    // Warehouse pickup
+    if (P.x < warehouse.x + warehouse.w && P.x + P.w > warehouse.x &&
+        P.y < warehouse.y + warehouse.h && P.y + P.h > warehouse.y) {
+        if (P.packages < 3 && warehouse.stock > 0) {
+            P.packages++;
+            warehouse.stock--;
+            score += 20;
+        }
+    }
+    
+    // Deliveries
+    for (const h of houses) {
+        if (h.needs && P.packages > 0 &&
+            P.x < h.x + h.w && P.x + P.w > h.x && P.y + P.h >= h.y) {
+            h.needs = false;
+            h.done = true;
+            P.packages--;
+            delivered++;
+            score += 150;
+            warehouse.stock = Math.min(warehouse.stock + 2, 12);
+            
+            if (delivered >= needed) {
+                setTimeout(nextLevel, 500);
+            } else {
+                assignDeliveries();
+            }
+        }
+    }
+    
+    // Ice
+    for (const ice of iceBlocks) {
+        ice.y += ice.speed;
+        ice.rot += 0.05;
+        
+        if (ice.y > H + 50) {
+            ice.y = -50 - Math.random() * 300;
+            ice.x = Math.random() * WORLD_W;
+        }
+        
+        // Collision
+        if (P.x < ice.x + ice.size && P.x + P.w > ice.x &&
+            P.y < ice.y + ice.size && P.y + P.h > ice.y) {
+            P.stamina -= 20;
+            score = Math.max(0, score - 25);
+            P.vx = (P.x > ice.x) ? 5 : -5;
+            P.vy = -8;
+            ice.y = -100 - Math.random() * 200;
+            ice.x = Math.random() * WORLD_W;
+            
+            if (P.stamina <= 0) {
+                P.stamina = 0;
+                endGame();
+            }
+        }
+    }
+    
+    // Snow
+    for (const s of snow) {
+        s.y += s.s;
+        s.x += Math.sin(Date.now() / 1000 + s.x) * 0.3;
+        if (s.y > H) { s.y = -5; s.x = Math.random() * WORLD_W; }
+    }
+    
+    // Camera
+    const target = P.x - W / 2 + P.w / 2;
+    camX += (target - camX) * 0.1;
+    camX = Math.max(0, Math.min(WORLD_W - W, camX));
+    
+    updateHUD();
+}
+
+function draw() {
+    // Sky
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#0a0a20');
+    sky.addColorStop(1, '#1a2a4a');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+    
+    // Stars
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    for (let i = 0; i < 40; i++) {
+        ctx.beginPath();
+        ctx.arc((i * 61) % W, (i * 37) % (H * 0.5), 1, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    // Moon
+    ctx.fillStyle = '#eee';
+    ctx.beginPath();
+    ctx.arc(W - 60, 50, 30, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.save();
+    ctx.translate(-camX, 0);
+    
+    // Ground FIRST
+    ctx.fillStyle = '#f5f5f5';
+    ctx.fillRect(0, GROUND, WORLD_W, 50);
+    ctx.fillStyle = '#e0e0e0';
+    ctx.fillRect(0, GROUND + 8, WORLD_W, 42);
+    
+    // Background buildings
+    ctx.fillStyle = '#2c3e50';
+    for (let x = 200; x < WORLD_W; x += 200) {
+        const bh = 80 + Math.sin(x) * 40;
+        ctx.fillRect(x, GROUND - bh, 100, bh);
+        ctx.fillStyle = '#34495e';
+        ctx.fillRect(x, GROUND - bh, 100, 10);
+        ctx.fillStyle = '#2c3e50';
+    }
+    
+    // Warehouse
+    if (warehouse) {
+        ctx.fillStyle = '#8b7355';
+        ctx.fillRect(warehouse.x, warehouse.y, warehouse.w, warehouse.h);
+        ctx.fillStyle = '#ffd93d';
+        ctx.fillRect(warehouse.x + 40, warehouse.y + 30, 40, 60);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('WAREHOUSE', warehouse.x + warehouse.w/2, warehouse.y - 5);
+        ctx.fillText('[' + warehouse.stock + ']', warehouse.x + warehouse.w/2, warehouse.y + 60);
+    }
+    
+    // Houses
+    for (const h of houses) {
+        // Body
+        ctx.fillStyle = '#ddd';
+        ctx.fillRect(h.x, h.y, h.w, h.h);
+        
+        // Roof
+        ctx.fillStyle = h.color;
+        ctx.beginPath();
+        ctx.moveTo(h.x - 8, h.y);
+        ctx.lineTo(h.x + h.w/2, h.y - 30);
+        ctx.lineTo(h.x + h.w + 8, h.y);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Snow on roof
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.moveTo(h.x - 8, h.y + 2);
+        ctx.lineTo(h.x + h.w/2, h.y - 25);
+        ctx.lineTo(h.x + h.w + 8, h.y + 2);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Door
+        ctx.fillStyle = '#654321';
+        ctx.fillRect(h.x + h.w/2 - 10, h.y + h.h - 35, 20, 35);
+        
+        // Windows
+        ctx.fillStyle = '#ffeaa7';
+        ctx.fillRect(h.x + 10, h.y + 15, 18, 18);
+        ctx.fillRect(h.x + h.w - 28, h.y + 15, 18, 18);
+        
+        // Delivery marker
+        if (h.needs) {
+            const pulse = 0.7 + Math.sin(Date.now() / 150) * 0.3;
+            ctx.fillStyle = 'rgba(255,100,100,' + pulse + ')';
+            ctx.beginPath();
+            ctx.moveTo(h.x + h.w/2, h.y - 45);
+            ctx.lineTo(h.x + h.w/2 - 12, h.y - 65);
+            ctx.lineTo(h.x + h.w/2 + 12, h.y - 65);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = '14px sans-serif';
+            ctx.fillText('📦', h.x + h.w/2, h.y - 50);
+        }
+        
+        // Done checkmark
+        if (h.done) {
+            ctx.fillStyle = '#4caf50';
+            ctx.beginPath();
+            ctx.arc(h.x + h.w/2, h.y - 40, 12, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = '14px sans-serif';
+            ctx.fillText('✓', h.x + h.w/2, h.y - 36);
+        }
+    }
+    
+    // Platforms
+    for (const pl of platforms) {
+        const g = ctx.createLinearGradient(pl.x, pl.y, pl.x, pl.y + pl.h);
+        g.addColorStop(0, '#b3e5fc');
+        g.addColorStop(1, '#4fc3f7');
+        ctx.fillStyle = g;
+        ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(pl.x, pl.y, pl.w, 3);
+    }
+    
+    // Snow particles
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    for (const s of snow) {
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    // Ice
+    for (const ice of iceBlocks) {
+        ctx.save();
+        ctx.translate(ice.x + ice.size/2, ice.y + ice.size/2);
+        ctx.rotate(ice.rot);
+        ctx.fillStyle = 'rgba(173,216,230,0.85)';
+        ctx.beginPath();
+        ctx.moveTo(0, -ice.size/2);
+        ctx.lineTo(ice.size/2, 0);
+        ctx.lineTo(0, ice.size/2);
+        ctx.lineTo(-ice.size/2, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+    }
+    
+    // Player - simple visible character
+    const px = P.x, py = P.y;
+    
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath();
+    ctx.ellipse(px + P.w/2, GROUND, P.w * 0.6, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Body (blue coat)
+    ctx.fillStyle = '#1976d2';
+    ctx.fillRect(px + 3, py + 12, P.w - 6, P.h - 20);
+    
+    // Legs
+    const walkOffset = Math.abs(P.vx) > 0.3 ? Math.sin(Date.now() / 80) * 4 : 0;
+    ctx.fillStyle = '#1565c0';
+    ctx.fillRect(px + 6 + walkOffset, py + P.h - 14, 8, 14);
+    ctx.fillRect(px + P.w - 14 - walkOffset, py + P.h - 14, 8, 14);
+    
+    // Boots
+    ctx.fillStyle = '#5d4037';
+    ctx.fillRect(px + 4 + walkOffset, py + P.h - 6, 11, 6);
+    ctx.fillRect(px + P.w - 15 - walkOffset, py + P.h - 6, 11, 6);
+    
+    // Scarf
+    ctx.fillStyle = '#e53935';
+    ctx.fillRect(px + 5, py + 12, P.w - 10, 5);
+    
+    // Head
+    ctx.fillStyle = '#ffcc80';
+    ctx.beginPath();
+    ctx.arc(px + P.w/2, py + 8, 9, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Hat
+    ctx.fillStyle = '#c62828';
+    ctx.beginPath();
+    ctx.arc(px + P.w/2, py + 4, 10, Math.PI, 0);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(px + P.w/2 - 11, py + 2, 22, 4);
+    ctx.beginPath();
+    ctx.arc(px + P.w/2, py - 4, 4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Eyes
+    ctx.fillStyle = '#333';
+    const eyeDir = P.right ? 2 : -2;
+    ctx.beginPath();
+    ctx.arc(px + P.w/2 + eyeDir - 3, py + 8, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(px + P.w/2 + eyeDir + 3, py + 8, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Backpack with packages
+    ctx.fillStyle = '#5d4037';
+    const bpX = P.right ? px - 6 : px + P.w - 6;
+    ctx.fillRect(bpX, py + 14, 10, 18);
+    if (P.packages > 0) {
+        ctx.fillStyle = '#ffd93d';
+        for (let i = 0; i < P.packages; i++) {
+            ctx.fillRect(bpX + 1, py + 15 + i * 5, 8, 4);
+        }
+    }
+    
+    ctx.restore();
+    
+    // Minimap
+    drawMinimap();
+}
+
+function drawMinimap() {
+    const mw = mini.width, mh = mini.height;
+    const sc = mw / WORLD_W;
+    
+    mctx.fillStyle = 'rgba(10,20,40,0.9)';
+    mctx.fillRect(0, 0, mw, mh);
+    
+    // Ground
+    mctx.fillStyle = '#555';
+    mctx.fillRect(0, mh - 6, mw, 6);
+    
+    // Warehouse
+    mctx.fillStyle = '#ffd93d';
+    mctx.fillRect(warehouse.x * sc, mh - 15, warehouse.w * sc, 9);
+    
+    // Houses
+    for (const h of houses) {
+        mctx.fillStyle = h.needs ? '#ff6b6b' : (h.done ? '#4caf50' : '#888');
+        mctx.fillRect(h.x * sc, mh - 14, h.w * sc, 8);
+    }
+    
+    // Player
+    mctx.fillStyle = '#4fc3f7';
+    mctx.beginPath();
+    mctx.arc(P.x * sc, mh - 18, 3, 0, Math.PI * 2);
+    mctx.fill();
+    
+    // View area
+    mctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    mctx.lineWidth = 1;
+    mctx.strokeRect(camX * sc, 2, W * sc, mh - 8);
+}
+
+function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
