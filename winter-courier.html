@@ -254,16 +254,18 @@
         position: absolute;
         top: 20%;
         right: 20px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: #fff;
-        padding: 15px 20px;
-        border-radius: 10px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        background: rgba(0, 0, 0, 0.85);
+        color: #4caf50;
+        padding: 12px 18px;
+        border-radius: 6px;
+        border: 1px solid #4caf50;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
         transform: translateX(400px);
         opacity: 0;
-        transition: all 0.5s ease;
+        transition: all 0.4s ease;
         z-index: 100;
         pointer-events: none;
+        font-size: 14px;
       }
       .achievement.show {
         transform: translateX(0);
@@ -305,10 +307,12 @@
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%) scale(0);
-        color: #ffd93d;
-        font-size: 48px;
-        font-weight: bold;
-        text-shadow: 0 0 20px rgba(255, 217, 61, 0.8);
+        color: #fff;
+        font-size: 24px;
+        font-weight: normal;
+        background: rgba(0, 0, 0, 0.75);
+        padding: 12px 24px;
+        border-radius: 6px;
         z-index: 300;
         pointer-events: none;
         opacity: 0;
@@ -391,6 +395,91 @@
       .stats-item {
         margin: 3px 0;
       }
+      /* Level Generator Styles */
+      .start-buttons {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      #levelGenBtn {
+        background: linear-gradient(#9c27b0, #7b1fa2);
+      }
+      #levelGenBtn:hover {
+        box-shadow: 0 0 25px rgba(156, 39, 176, 1);
+      }
+      .level-gen-content {
+        max-width: 500px;
+        text-align: center;
+      }
+      .level-gen-content textarea {
+        width: 100%;
+        height: 100px;
+        padding: 12px;
+        border: 2px solid #4fc3f7;
+        border-radius: 8px;
+        background: rgba(0,0,0,0.5);
+        color: #fff;
+        font-size: 14px;
+        resize: none;
+        margin: 15px 0;
+      }
+      .level-gen-content textarea:focus {
+        outline: none;
+        border-color: #81d4fa;
+        box-shadow: 0 0 10px rgba(79, 195, 247, 0.5);
+      }
+      .quick-gen {
+        margin: 20px 0;
+        padding: 15px;
+        border-top: 1px solid #4fc3f7;
+      }
+      .quick-gen button {
+        margin: 5px;
+        padding: 8px 20px;
+        font-size: 14px;
+      }
+      .cancel-btn {
+        background: linear-gradient(#666, #444) !important;
+        margin-top: 10px;
+      }
+      #level-preview {
+        background: rgba(79, 195, 247, 0.2);
+        border: 1px solid #4fc3f7;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 15px 0;
+        max-width: 400px;
+      }
+      .level-info h3 {
+        color: #ffd93d;
+        margin-bottom: 8px;
+      }
+      .level-stats {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin-top: 10px;
+        font-size: 13px;
+      }
+      .level-stats span {
+        background: rgba(0,0,0,0.3);
+        padding: 4px 10px;
+        border-radius: 4px;
+      }
+      .loading-spinner {
+        width: 50px;
+        height: 50px;
+        border: 4px solid rgba(255,255,255,0.3);
+        border-top-color: #4fc3f7;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
     </style>
   </head>
   <body>
@@ -405,15 +494,15 @@
         <div class="hud-item">
           Deliveries: <span id="del">0</span>/<span id="need">5</span>
         </div>
-        <div class="hud-item" id="combo-hud" style="opacity: 0">
-          🔥 Combo: <span id="combo-count">0</span>x
+        <div class="hud-item" id="combo-hud" style="display: none;">
+          Combo: <span id="combo-count">0</span>x
         </div>
         <div
           class="hud-item"
           id="thief-warning"
-          style="opacity: 0; color: #ff4444; border-color: #ff4444"
+          style="opacity: 0; background: linear-gradient(135deg, #4a7c59, #2d5a3d); color: #fff; border-color: #4a7c59; text-shadow: 0 0 10px rgba(74, 124, 89, 0.8); font-weight: bold;"
         >
-          ⚠️ THIEF ALERT!
+          🎄 GRINCH ALERT!
         </div>
         <div
           class="hud-item"
@@ -430,6 +519,9 @@
         <div class="hud-item">
           Stamina
           <div id="stamina-bar"><div id="stamina-fill"></div></div>
+        </div>
+        <div id="turbo-indicator" class="hud-item" style="display: none; background: linear-gradient(135deg, #ff6600, #ff0000); animation: pulse 0.3s infinite;">
+          🔥 TURBO!
         </div>
       </div>
 
@@ -460,22 +552,56 @@
       </div>
 
       <div id="start" class="overlay">
-        <h1>❄️ Winter Courier ❄️</h1>
-        <h2>Frozen City Deliveries</h2>
-        <div class="info">
-          Navigate the frozen city! Pick up packages from the warehouse and
-          deliver to houses.<br /><br />
-          <span class="key">A</span> <span class="key">D</span> Move |
-          <span class="key">W</span> / <span class="key">Space</span> Jump |
-          <span class="key">Shift</span> Sprint | <span class="key">P</span> /
-          <span class="key">ESC</span> Pause<br /><br />
-          📦 Yellow = Warehouse | 🏠 Red marker = Needs delivery<br />
-          🧊 Avoid falling ice! | ⚡⭐ Collect power-ups!<br />
-          🦹 Red Thief = Steals packages! Jump on him to defeat!<br />
-          💡 Tip: Land on thief's head to damage (like Mario)!<br />
-          Chain deliveries for combo bonuses!
+        <h1 style="font-size: 28px; margin-bottom: 30px; font-weight: normal;">Winter Courier</h1>
+        
+        <div class="info" style="font-size: 13px; line-height: 2.2; max-width: 450px; text-align: center;">
+          <div style="margin-bottom: 20px;">
+            <span class="key">A/D</span> Move &nbsp;&nbsp;
+            <span class="key">W/Space</span> Jump &nbsp;&nbsp;
+            <span class="key">Shift</span> Sprint
+          </div>
+          <div style="margin-bottom: 20px;">
+            <span class="key">P</span> Pause &nbsp;&nbsp;
+            <span class="key">ESC</span> Menu
+          </div>
+          <div style="margin-bottom: 15px; opacity: 0.8;">
+            Collect packages from warehouse<br />
+            Deliver to marked houses
+          </div>
+          <div style="opacity: 0.8;">
+            Avoid falling ice &nbsp;·&nbsp; Jump on Grinch to defeat
+          </div>
         </div>
-        <button id="startBtn">Start Game</button>
+        
+        <div id="level-preview" class="hidden" style="display: none;"></div>
+        <div class="start-buttons" style="margin-top: 30px;">
+          <button id="startBtn">Start Game</button>
+          <button id="levelGenBtn" onclick="showLevelGeneratorModal()">Generate Level</button>
+        </div>
+      </div>
+
+      <!-- Level Generator Modal -->
+      <div id="level-gen-modal" class="overlay hidden">
+        <h2>🎮 AI Level Generator</h2>
+        <div class="level-gen-content">
+          <p>Describe the level you want to play:</p>
+          <textarea id="level-prompt" placeholder="Example: Create a challenging level with lots of moving platforms, fewer houses spread far apart, and aggressive ice falling. Make it hard but fair!"></textarea>
+          <button onclick="generateAILevel()">✨ Generate with AI</button>
+          <div class="quick-gen">
+            <p>Or quick generate:</p>
+            <button onclick="generateQuickLevel('easy')">😊 Easy</button>
+            <button onclick="generateQuickLevel('medium')">😐 Medium</button>
+            <button onclick="generateQuickLevel('hard')">😈 Hard</button>
+          </div>
+          <button class="cancel-btn" onclick="hideLevelGeneratorModal()">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Level Generation Loading Overlay -->
+      <div id="level-gen-overlay" class="overlay hidden">
+        <div class="loading-spinner"></div>
+        <h2>🤖 Generating Level...</h2>
+        <p>AI is crafting your custom level</p>
       </div>
 
       <div id="gameover" class="overlay hidden">
@@ -513,6 +639,7 @@
       </div>
     </div>
     <script src="audio.js"></script>
+    <script src="level-generator.js"></script>
 
     <script>
       const canvas = document.getElementById("c");
@@ -567,6 +694,7 @@
       let snow = [];
       let particles = [];
       let powerUps = [];
+      let obstacles = [];
       let combo = 0;
       let comboTime = 0;
       let screenShake = 0;
@@ -584,6 +712,8 @@
       let currentMission = null;
       let missionProgress = 0;
       let missionTarget = 0;
+      let turboActive = false;
+      let turboTimer = 0;
 
       // Particle system
       function createParticles(x, y, color, count = 10) {
@@ -626,52 +756,116 @@
       }
 
       function init() {
+        // Check for custom level
+        const customLevel = window.customLevel;
+        
         // Warehouse
         warehouse = { x: 80, y: GROUND - 90, w: 120, h: 90, stock: 10 };
 
-        // Houses
+        // Houses - use custom or default (some elevated on platforms)
         houses = [];
-        const spots = [400, 700, 1000, 1400, 1800, 2200, 2500, 2800];
-        spots.forEach((x, i) => {
-          houses.push({
-            x: x + Math.random() * 100 - 50,
-            y: GROUND - 70,
-            w: 80,
-            h: 70,
-            color: ["#c0392b", "#27ae60", "#2980b9", "#8e44ad", "#d35400"][
-              i % 5
-            ],
-            needs: false,
-            done: false,
-            name: "House " + (i + 1),
-            missionTarget: false,
+        const elevatedPlatforms = []; // Platforms for elevated houses
+        if (customLevel && customLevel.houses) {
+          customLevel.houses.forEach((h, i) => {
+            houses.push({
+              x: h.x,
+              y: GROUND - 70,
+              w: 80,
+              h: 70,
+              color: h.color || ["#c0392b", "#27ae60", "#2980b9", "#8e44ad", "#d35400"][i % 5],
+              needs: false,
+              done: false,
+              name: "House " + (i + 1),
+              missionTarget: false,
+              elevated: false,
+            });
           });
-        });
-
-        // Platforms
-        platforms = [];
-        for (let x = 300; x < WORLD_W - 100; x += 250 + Math.random() * 150) {
-          platforms.push({
-            x: x,
-            y: GROUND - 100 - Math.random() * 80,
-            w: 80 + Math.random() * 40,
-            h: 14,
-            moving: Math.random() > 0.5,
-            dir: 1,
-            speed: 1 + Math.random(),
-            start: x,
-            range: 60,
+        } else {
+          const spots = [400, 700, 1000, 1400, 1800, 2200, 2500, 2800];
+          spots.forEach((x, i) => {
+            // Make some houses elevated (houses 2, 5, 7 are elevated)
+            const isElevated = (i === 1 || i === 4 || i === 6);
+            const platformHeight = isElevated ? 80 : 0;
+            const houseX = x + Math.random() * 100 - 50;
+            
+            if (isElevated) {
+              // Create a wider platform for the elevated house
+              elevatedPlatforms.push({
+                x: houseX - 20,
+                y: GROUND - platformHeight,
+                w: 120, // Wide enough for house + some room
+                h: 14,
+                moving: false, // Elevated house platforms don't move
+                dir: 1,
+                speed: 0,
+                start: houseX - 20,
+                range: 0,
+              });
+            }
+            
+            houses.push({
+              x: houseX,
+              y: GROUND - 70 - platformHeight,
+              w: 80,
+              h: 70,
+              color: ["#c0392b", "#27ae60", "#2980b9", "#8e44ad", "#d35400"][i % 5],
+              needs: false,
+              done: false,
+              name: isElevated ? "Treehouse " + (i + 1) : "House " + (i + 1),
+              missionTarget: false,
+              elevated: isElevated,
+            });
           });
         }
 
-        // Ice
+        // Platforms - use custom or default
+        platforms = [];
+        // First add elevated house platforms
+        platforms.push(...elevatedPlatforms);
+        
+        if (customLevel && customLevel.platforms) {
+          customLevel.platforms.forEach((p) => {
+            // Use heightAboveGround (60-120 range) to calculate Y position
+            const height = Math.min(Math.max(p.heightAboveGround || 80, 60), 120);
+            const isMoving = p.moving !== undefined ? p.moving : (Math.random() > 0.5);
+            platforms.push({
+              x: p.x,
+              y: GROUND - height,
+              w: p.width || 80,
+              h: 14,
+              moving: isMoving,
+              dir: 1,
+              speed: p.speed || (1 + Math.random()),
+              start: p.x,
+              range: 60,
+            });
+          });
+        } else {
+          for (let x = 300; x < WORLD_W - 100; x += 250 + Math.random() * 150) {
+            platforms.push({
+              x: x,
+              y: GROUND - 80 - Math.random() * 40,
+              w: 80 + Math.random() * 40,
+              h: 14,
+              moving: Math.random() > 0.5,
+              dir: 1,
+              speed: 1 + Math.random(),
+              start: x,
+              range: 60,
+            });
+          }
+        }
+
+        // Ice - use custom settings or default
+        const iceCount = (customLevel && customLevel.iceCount) || (12 + level * 2);
+        const iceSpeedMult = (customLevel && customLevel.iceSpeed) || 1.0;
         iceBlocks = [];
-        for (let i = 0; i < 12 + level * 2; i++) {
+        for (let i = 0; i < iceCount; i++) {
           iceBlocks.push({
             x: Math.random() * WORLD_W,
             y: -Math.random() * 600,
             size: 15 + Math.random() * 10,
-            speed: 2 + Math.random() * 2 + level * 0.3,
+            speed: (2 + Math.random() * 2 + level * 0.3) * iceSpeedMult,
             rot: 0,
           });
         }
@@ -687,23 +881,62 @@
           });
         }
 
-        // Power-ups
+        // Obstacles (snowdrifts slow down, ice blocks are solid barriers)
+        obstacles = [];
+        // Add slowing obstacles (snowdrifts)
+        for (let i = 0; i < 4 + Math.floor(level / 2); i++) {
+          const h = 20 + Math.random() * 25;
+          obstacles.push({
+            x: 600 + Math.random() * (WORLD_W - 800),
+            y: GROUND - h,
+            w: 40 + Math.random() * 30,
+            h: h,
+            type: "snowdrift" // Slows down player
+          });
+        }
+        // Add solid blocking obstacles (ice blocks/barriers)
+        for (let i = 0; i < 3 + Math.floor(level / 2); i++) {
+          const h = 50 + Math.random() * 40; // Taller than player
+          obstacles.push({
+            x: 700 + Math.random() * (WORLD_W - 900),
+            y: GROUND - h,
+            w: 25 + Math.random() * 15,
+            h: h,
+            type: "iceblock" // Solid barrier - blocks movement
+          });
+        }
+
+        // Power-ups - use custom chance or default (now includes turbo)
+        const powerUpCount = customLevel ? Math.floor((customLevel.powerUpChance || 0.3) * 10) : (4 + level);
         powerUps = [];
-        for (let i = 0; i < 3 + level; i++) {
+        for (let i = 0; i < powerUpCount; i++) {
+          const rand = Math.random();
+          let type;
+          if (rand < 0.33) type = "stamina";
+          else if (rand < 0.66) type = "speed";
+          else type = "turbo";
           powerUps.push({
             x: 500 + Math.random() * (WORLD_W - 1000),
             y: GROUND - 120 - Math.random() * 100,
-            type: Math.random() > 0.5 ? "stamina" : "speed",
+            type: type,
             rot: 0,
             collected: false,
           });
         }
 
-        // Thief
+        // Thief (Grinch) - use custom settings
+        const thiefEnabled = customLevel ? customLevel.thiefEnabled !== false : true;
         thief = null;
-        thiefSpawnTime = 180 + level * 60; // Spawns after 3-5 seconds
-        thiefDefeated = false;
+        thiefSpawnTime = thiefEnabled ? (180 + level * 60) : 999999;
+        thiefDefeated = !thiefEnabled;
         thiefHitCooldown = 0;
+        
+        // Set deliveries needed from custom level
+        if (customLevel && customLevel.deliveriesNeeded) {
+          needed = customLevel.deliveriesNeeded;
+        } else {
+          needed = 4 + level * 2;
+        }
         damageNumbers = [];
 
         // Reset player
@@ -731,11 +964,13 @@
       }
 
       function generateMission() {
+        // Cap delivery target at number of houses
+        const maxDeliveries = houses.length;
         const missionTypes = [
           {
             type: "deliver",
             text: (target) => `Deliver ${target} packages`,
-            target: 3 + level,
+            target: Math.min(3 + level, maxDeliveries),
             progress: () => delivered,
           },
           // ... (other mission types unchanged)
@@ -881,6 +1116,10 @@
         document.getElementById("del").textContent = delivered;
         document.getElementById("need").textContent = needed;
         document.getElementById("stamina-fill").style.width = P.stamina + "%";
+        
+        // Turbo indicator
+        const turboIndicator = document.getElementById("turbo-indicator");
+        turboIndicator.style.display = turboActive ? "block" : "none";
 
         // Combo display
         const comboHud = document.getElementById("combo-hud");
@@ -896,9 +1135,9 @@
         // Thief warning
         const thiefWarning = document.getElementById("thief-warning");
         if (thief && !thiefDefeated) {
+          thiefWarning.style.display = "block";
           const dist = Math.abs(P.x - thief.x);
           if (dist < 300) {
-            thiefWarning.style.opacity = "1";
             const pulse = 0.7 + Math.sin(Date.now() / 100) * 0.3;
             thiefWarning.style.opacity = pulse;
           } else {
@@ -906,6 +1145,7 @@
           }
         } else {
           thiefWarning.style.opacity = "0";
+          thiefWarning.style.display = "none";
         }
 
         // HP Low warning
@@ -953,12 +1193,35 @@
       const keys = {};
       let paused = false;
       document.addEventListener("keydown", (e) => {
+        // Don't capture keys when typing in input/textarea
+        const activeEl = document.activeElement;
+        const isTyping = activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA");
+        
+        if (isTyping) return; // Let typing work normally
+        
         keys[e.code] = true;
         if (["Space", "ArrowUp", "ArrowDown"].includes(e.code))
           e.preventDefault();
-        if ((e.code === "KeyP" || e.code === "Escape") && state === "play") {
+        // P for pause
+        if (e.code === "KeyP" && state === "play") {
           paused = !paused;
           document.getElementById("pause").classList.toggle("show", paused);
+        }
+        // ESC returns to start screen
+        if (e.code === "Escape" && state === "play") {
+          paused = false;
+          document.getElementById("pause").classList.remove("show");
+          state = "start";
+          document.getElementById("hud").classList.add("hidden");
+          document.getElementById("target").classList.add("hidden");
+          document.getElementById("mission").classList.add("hidden");
+          document.getElementById("stats").classList.add("hidden");
+          document.getElementById("start").classList.remove("hidden");
+          window.customLevel = null;
+          const preview = document.getElementById("level-preview");
+          if (preview) preview.style.display = "none";
+          const startBtn = document.getElementById("startBtn");
+          if (startBtn) startBtn.textContent = "Start Game";
         }
       });
       document.addEventListener("keyup", (e) => (keys[e.code] = false));
@@ -1001,9 +1264,9 @@
         score += 500 + combo * 50;
         createParticles(P.x + P.w / 2, P.y + P.h / 2, "#4fc3f7", 30);
         screenShake = 4; // Minimal shake for level up
-        // Show level up animation
+        // Show level up animation - just the level number
         const levelUpEl = document.getElementById("level-up");
-        levelUpEl.textContent = `LEVEL ${level}!`;
+        levelUpEl.textContent = `Level ${level}`;
         levelUpEl.classList.add("show");
         setTimeout(() => levelUpEl.classList.remove("show"), 1500);
 
@@ -1058,7 +1321,9 @@
         // Input
         const sprint = keys["ShiftLeft"] || keys["ShiftRight"];
         let acc = ACCEL;
-        if (sprint && P.stamina > 0) {
+        if (turboActive) {
+          acc *= 2.5; // Turbo gives massive speed boost
+        } else if (sprint && P.stamina > 0) {
           acc *= SPRINT;
           P.stamina -= 0.5;
         }
@@ -1084,8 +1349,9 @@
 
         // Physics
         P.vx *= FRIC;
-        if (P.vx > MAX_V) P.vx = MAX_V;
-        if (P.vx < -MAX_V) P.vx = -MAX_V;
+        const maxV = turboActive ? MAX_V * 2 : MAX_V;
+        if (P.vx > maxV) P.vx = maxV;
+        if (P.vx < -maxV) P.vx = -maxV;
         P.vy += GRAV;
 
         P.x += P.vx;
@@ -1140,24 +1406,24 @@
           // Hit cooldown to prevent multiple hits in one jump
           if (thiefHitCooldown > 0) thiefHitCooldown--;
 
-          // Player jumping on thief (improved collision detection)
-          const isAboveThief = distY > -5 && distY < 50;
-          const isLanding = P.vy > 0 || (P.grounded && distY < 20);
-          const isHorizontallyAligned = distX < (P.w + thief.w) / 2 + 5;
+          // Player jumping on thief - MUST be falling from above
+          const isAboveThief = distY > -10 && distY < 45;
+          const isFallingOnto = P.vy > 0.5; // Must be moving downward
+          const isHorizontallyAligned = distX < (P.w + thief.w) / 2 + 10;
 
           if (
             horizontalOverlap &&
             isAboveThief &&
-            isLanding &&
+            isFallingOnto &&
             isHorizontallyAligned &&
             thiefHitCooldown === 0
           ) {
             // Damage the thief
             thief.health--;
-            thiefHitCooldown = 20; // Prevent multiple hits
-            createParticles(thief.x + thief.w / 2, thief.y, "#ff4444", 25);
+            thiefHitCooldown = 45; // Longer cooldown - must land and jump again
+            createParticles(thief.x + thief.w / 2, thief.y, "#4a7c59", 25); // Green particles for Grinch
             screenShake = 2; // Minimal shake intensity
-            P.vy = -12; // Better bounce off
+            P.vy = -14; // Strong bounce off to ensure player leaves
             score += 100;
             showScorePopup(thief.x + thief.w / 2, thief.y, "+100", "#ffd93d");
 
@@ -1170,8 +1436,9 @@
               vy: -2,
             });
 
-            // Stun thief briefly
-            thief.vx *= 0.3;
+            // Stun thief and push away
+            thief.vx = P.x > thief.x ? -4 : 4; // Push thief away from player
+            thief.vy = -5; // Small bounce
 
             if (thief.health <= 0) {
               // Thief defeated!
@@ -1186,13 +1453,16 @@
               showScorePopup(
                 P.x + P.w / 2,
                 P.y,
-                "+500 THIEF DEFEATED!",
+                "+500 GRINCH DEFEATED!",
                 "#4caf50"
               );
-              showAchievement("🦹", "Thief Defeated!");
+              showAchievement("🎄", "Grinch Defeated!");
               thiefDefeated = true;
               thief = null;
-              showCombo("THIEF DEFEATED!");
+              // Immediately hide Grinch alert
+              const thiefAlert = document.getElementById("thief-warning");
+              thiefAlert.style.opacity = "0";
+              thiefAlert.style.display = "none";
               // Check mission completion
               if (currentMission && currentMission.type === "thief") {
                 missionProgress = 1;
@@ -1210,11 +1480,10 @@
             P.packages > 0 &&
             thief.stealCooldown === 0
           ) {
-            // Push player away when thief steals
+            // Push player away when thief steals (no vertical push to prevent auto-jumps)
             window.dispatchEvent(new Event("player-hit"));
             P.stamina -= 5;
             P.vx = P.x > thief.x ? 8 : -8;
-            P.vy = -5;
           }
         }
 
@@ -1337,6 +1606,14 @@
           }
         }
 
+        // Turbo timer countdown
+        if (turboActive) {
+          turboTimer--;
+          if (turboTimer <= 0) {
+            turboActive = false;
+          }
+        }
+
         // Power-ups
         for (const pu of powerUps) {
           if (
@@ -1350,12 +1627,17 @@
             createParticles(
               pu.x + 10,
               pu.y + 10,
-              pu.type === "stamina" ? "#4fc3f7" : "#ffd93d",
+              pu.type === "turbo" ? "#ff4444" : (pu.type === "stamina" ? "#4fc3f7" : "#ffd93d"),
               15
             );
             if (pu.type === "stamina") {
               P.stamina = Math.min(100, P.stamina + 30);
               showScorePopup(pu.x + 10, pu.y + 10, "⚡ +30 Stamina", "#4fc3f7");
+            } else if (pu.type === "turbo") {
+              turboActive = true;
+              turboTimer = 300; // 5 seconds at 60fps
+              showScorePopup(pu.x + 10, pu.y + 10, "🚀 TURBO!", "#ff4444");
+              showCombo("TURBO MODE!");
             } else {
               score += 100;
               showScorePopup(pu.x + 10, pu.y + 10, "⭐ +100", "#ffd93d");
@@ -1370,7 +1652,61 @@
           }
         }
 
-        // Thief
+        // Obstacle collision
+        for (const ob of obstacles) {
+          // Check if player overlaps with obstacle
+          const playerRight = P.x + P.w;
+          const playerBottom = P.y + P.h;
+          const obLeft = ob.x;
+          const obRight = ob.x + ob.w;
+          const obTop = ob.y;
+          const obBottom = ob.y + ob.h;
+          
+          if (playerRight > obLeft && P.x < obRight && playerBottom > obTop && P.y < obBottom) {
+            if (ob.type === "iceblock") {
+              // Solid barrier - push player out
+              const overlapLeft = playerRight - obLeft;
+              const overlapRight = obRight - P.x;
+              const overlapTop = playerBottom - obTop;
+              const overlapBottom = obBottom - P.y;
+              
+              // Find smallest overlap to determine push direction
+              const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
+              
+              if (minOverlap === overlapTop && P.vy >= 0) {
+                // Landing on top
+                P.y = obTop - P.h;
+                P.vy = 0;
+                P.grounded = true;
+              } else if (minOverlap === overlapLeft && P.vx > 0) {
+                // Hit from left side
+                P.x = obLeft - P.w;
+                P.vx = 0;
+              } else if (minOverlap === overlapRight && P.vx < 0) {
+                // Hit from right side
+                P.x = obRight;
+                P.vx = 0;
+              } else if (minOverlap === overlapBottom && P.vy < 0) {
+                // Hit from below
+                P.y = obBottom;
+                P.vy = 0;
+              }
+            } else {
+              // Snowdrift or icewall - slow down and allow landing
+              if (P.vy >= 0 && P.y + P.h <= obTop + 10) {
+                // Landing on top
+                P.y = obTop - P.h;
+                P.vy = 0;
+                P.grounded = true;
+              } else {
+                // Side contact - slow down
+                P.vx *= 0.6;
+              }
+            }
+          }
+        }
+
+        // Thief (Grinch)
         if (thiefSpawnTime > 0) {
           thiefSpawnTime--;
           if (thiefSpawnTime === 0 && !thiefDefeated) {
@@ -1772,6 +2108,103 @@
           ctx.fillRect(pl.x, pl.y, pl.w, 3);
         }
 
+        // Obstacles (snowdrifts, ice walls, and solid ice blocks)
+        for (const obs of obstacles) {
+          if (obs.type === "snowdrift") {
+            // Snowdrift - a mound of snow (slows movement)
+            ctx.fillStyle = "#e8f5ff";
+            ctx.beginPath();
+            ctx.moveTo(obs.x, obs.y + obs.h);
+            ctx.quadraticCurveTo(obs.x + obs.w / 4, obs.y, obs.x + obs.w / 2, obs.y);
+            ctx.quadraticCurveTo(obs.x + obs.w * 0.75, obs.y, obs.x + obs.w, obs.y + obs.h);
+            ctx.closePath();
+            ctx.fill();
+            // Snow texture
+            ctx.fillStyle = "#fff";
+            ctx.beginPath();
+            ctx.arc(obs.x + obs.w * 0.3, obs.y + obs.h * 0.4, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(obs.x + obs.w * 0.6, obs.y + obs.h * 0.3, 5, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (obs.type === "icewall") {
+            // Ice wall - translucent blue block (slows movement)
+            const g = ctx.createLinearGradient(obs.x, obs.y, obs.x + obs.w, obs.y);
+            g.addColorStop(0, "rgba(100,200,255,0.8)");
+            g.addColorStop(0.5, "rgba(200,240,255,0.9)");
+            g.addColorStop(1, "rgba(100,200,255,0.8)");
+            ctx.fillStyle = g;
+            ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+            // Ice cracks
+            ctx.strokeStyle = "rgba(255,255,255,0.6)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(obs.x + 5, obs.y + 5);
+            ctx.lineTo(obs.x + obs.w / 2, obs.y + obs.h / 2);
+            ctx.lineTo(obs.x + obs.w - 5, obs.y + 10);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(obs.x + obs.w / 2, obs.y + obs.h / 2);
+            ctx.lineTo(obs.x + 10, obs.y + obs.h - 5);
+            ctx.stroke();
+            // Highlight
+            ctx.fillStyle = "rgba(255,255,255,0.4)";
+            ctx.fillRect(obs.x + 3, obs.y + 3, obs.w / 3, obs.h - 6);
+          } else if (obs.type === "iceblock") {
+            // Solid ice block barrier - blocks movement completely
+            const g = ctx.createLinearGradient(obs.x, obs.y, obs.x, obs.y + obs.h);
+            g.addColorStop(0, "#87ceeb");
+            g.addColorStop(0.3, "#b0e0e6");
+            g.addColorStop(0.7, "#87ceeb");
+            g.addColorStop(1, "#5f9ea0");
+            ctx.fillStyle = g;
+            ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+            
+            // Frozen texture/details
+            ctx.strokeStyle = "rgba(255,255,255,0.7)";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(obs.x + 2, obs.y + 2, obs.w - 4, obs.h - 4);
+            
+            // Ice crystal patterns
+            ctx.strokeStyle = "rgba(200,240,255,0.8)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(obs.x + obs.w / 2, obs.y + 5);
+            ctx.lineTo(obs.x + obs.w / 2, obs.y + obs.h - 5);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(obs.x + 5, obs.y + obs.h / 2);
+            ctx.lineTo(obs.x + obs.w - 5, obs.y + obs.h / 2);
+            ctx.stroke();
+            
+            // Diagonal cracks
+            ctx.beginPath();
+            ctx.moveTo(obs.x + 5, obs.y + 5);
+            ctx.lineTo(obs.x + obs.w / 3, obs.y + obs.h / 3);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(obs.x + obs.w - 5, obs.y + obs.h - 5);
+            ctx.lineTo(obs.x + obs.w * 0.66, obs.y + obs.h * 0.66);
+            ctx.stroke();
+            
+            // Top shine
+            ctx.fillStyle = "rgba(255,255,255,0.5)";
+            ctx.fillRect(obs.x + 3, obs.y + 3, obs.w - 6, 6);
+            
+            // Icicles at bottom
+            ctx.fillStyle = "#b0e0e6";
+            for (let i = 0; i < 3; i++) {
+              const ix = obs.x + 5 + i * (obs.w - 10) / 2;
+              ctx.beginPath();
+              ctx.moveTo(ix, obs.y + obs.h);
+              ctx.lineTo(ix + 4, obs.y + obs.h);
+              ctx.lineTo(ix + 2, obs.y + obs.h + 8 + Math.random() * 4);
+              ctx.closePath();
+              ctx.fill();
+            }
+          }
+        }
+
         // Snow particles
         ctx.fillStyle = "rgba(255,255,255,0.6)";
         for (const s of snow) {
@@ -1808,7 +2241,15 @@
             ctx.rotate(pu.rot);
             const pulse = 0.8 + Math.sin(Date.now() / 200) * 0.2;
             ctx.globalAlpha = pulse;
-            ctx.fillStyle = pu.type === "stamina" ? "#4fc3f7" : "#ffd93d";
+            // Different colors for each powerup type
+            if (pu.type === "stamina") {
+              ctx.fillStyle = "#4fc3f7";
+            } else if (pu.type === "speed") {
+              ctx.fillStyle = "#ffd93d";
+            } else {
+              // Turbo - fiery orange/red
+              ctx.fillStyle = "#ff6600";
+            }
             ctx.beginPath();
             ctx.arc(0, 0, 8, 0, Math.PI * 2);
             ctx.fill();
@@ -1816,18 +2257,22 @@
             ctx.font = "bold 12px sans-serif";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
-            ctx.fillText(pu.type === "stamina" ? "⚡" : "⭐", 0, 0);
+            // Different icons for each type
+            let icon = "⚡";
+            if (pu.type === "speed") icon = "⭐";
+            else if (pu.type === "turbo") icon = "🔥";
+            ctx.fillText(icon, 0, 0);
             ctx.restore();
           }
         }
 
-        // Thief (draw before player so player appears on top)
+        // Grinch (draw before player so player appears on top)
         if (thief && !thiefDefeated) {
           const tx = thief.x,
             ty = thief.y;
 
           // Shadow
-          ctx.fillStyle = "rgba(255,0,0,0.3)";
+          ctx.fillStyle = "rgba(0,100,0,0.3)";
           ctx.beginPath();
           ctx.ellipse(
             tx + thief.w / 2,
@@ -1840,7 +2285,7 @@
           );
           ctx.fill();
 
-          // Red glow effect (Among Us style)
+          // Evil glow effect
           if (thief.suspicious) {
             const glow = ctx.createRadialGradient(
               tx + thief.w / 2,
@@ -1850,47 +2295,151 @@
               ty + thief.h / 2,
               50
             );
-            glow.addColorStop(0, "rgba(255,68,68,0.4)");
-            glow.addColorStop(1, "rgba(255,68,68,0)");
+            glow.addColorStop(0, "rgba(0,200,0,0.4)");
+            glow.addColorStop(1, "rgba(0,200,0,0)");
             ctx.fillStyle = glow;
             ctx.beginPath();
             ctx.arc(tx + thief.w / 2, ty + thief.h / 2, 50, 0, Math.PI * 2);
             ctx.fill();
           }
 
-          // Body (red coat - suspicious!)
-          ctx.fillStyle = "#d32f2f";
-          ctx.fillRect(tx + 2, ty + 10, thief.w - 4, thief.h - 18);
+          // === THE GRINCH ===
+          
+          // Furry green body
+          ctx.fillStyle = "#4a7c59";
+          ctx.fillRect(tx + 2, ty + 14, thief.w - 4, thief.h - 22);
+          
+          // Fur texture on body
+          ctx.fillStyle = "#3d6b4a";
+          for (let i = 0; i < 5; i++) {
+            ctx.beginPath();
+            ctx.arc(tx + 6 + i * 5, ty + 20 + (i % 2) * 8, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
 
-          // Legs
+          // Legs (skinny green)
           const walkOffset =
             Math.abs(thief.vx) > 0.3 ? Math.sin(Date.now() / 100) * 3 : 0;
-          ctx.fillStyle = "#b71c1c";
-          ctx.fillRect(tx + 4 + walkOffset, ty + thief.h - 12, 6, 12);
-          ctx.fillRect(
-            tx + thief.w - 10 - walkOffset,
-            ty + thief.h - 12,
-            6,
-            12
-          );
+          ctx.fillStyle = "#4a7c59";
+          ctx.fillRect(tx + 6 + walkOffset, ty + thief.h - 14, 5, 14);
+          ctx.fillRect(tx + thief.w - 11 - walkOffset, ty + thief.h - 14, 5, 14);
 
-          // Boots
-          ctx.fillStyle = "#212121";
-          ctx.fillRect(tx + 2 + walkOffset, ty + thief.h - 4, 9, 4);
-          ctx.fillRect(tx + thief.w - 11 - walkOffset, ty + thief.h - 4, 9, 4);
-
-          // Mask (thief mask)
-          ctx.fillStyle = "#424242";
-          ctx.fillRect(tx + 4, ty + 8, thief.w - 8, 12);
-
-          // Eyes (glowing red)
-          ctx.fillStyle = "#ff4444";
-          const eyeDir = thief.right ? 2 : -2;
+          // Grinch feet (big and hairy)
+          ctx.fillStyle = "#3d6b4a";
           ctx.beginPath();
-          ctx.arc(tx + thief.w / 2 + eyeDir - 3, ty + 12, 2, 0, Math.PI * 2);
+          ctx.ellipse(tx + 8 + walkOffset, ty + thief.h - 2, 8, 4, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.beginPath();
-          ctx.arc(tx + thief.w / 2 + eyeDir + 3, ty + 12, 2, 0, Math.PI * 2);
+          ctx.ellipse(tx + thief.w - 8 - walkOffset, ty + thief.h - 2, 8, 4, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Grinch head (larger, furry)
+          ctx.fillStyle = "#4a7c59";
+          ctx.beginPath();
+          ctx.arc(tx + thief.w / 2, ty + 8, 12, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Fur tufts on head
+          ctx.fillStyle = "#3d6b4a";
+          ctx.beginPath();
+          ctx.arc(tx + thief.w / 2 - 8, ty + 2, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(tx + thief.w / 2 + 8, ty + 2, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(tx + thief.w / 2, ty - 2, 3, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Evil eyebrows (arched)
+          ctx.strokeStyle = "#3d6b4a";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(tx + thief.w / 2 - 10, ty + 4);
+          ctx.quadraticCurveTo(tx + thief.w / 2 - 5, ty + 1, tx + thief.w / 2 - 2, ty + 5);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(tx + thief.w / 2 + 10, ty + 4);
+          ctx.quadraticCurveTo(tx + thief.w / 2 + 5, ty + 1, tx + thief.w / 2 + 2, ty + 5);
+          ctx.stroke();
+
+          // Yellow eyes (sinister)
+          ctx.fillStyle = "#ffeb3b";
+          const eyeDir = thief.right ? 2 : -2;
+          ctx.beginPath();
+          ctx.arc(tx + thief.w / 2 + eyeDir - 5, ty + 8, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(tx + thief.w / 2 + eyeDir + 5, ty + 8, 4, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Red pupils
+          ctx.fillStyle = "#c62828";
+          ctx.beginPath();
+          ctx.arc(tx + thief.w / 2 + eyeDir - 5, ty + 8, 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(tx + thief.w / 2 + eyeDir + 5, ty + 8, 2, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Angry frown (not a smile!)
+          ctx.strokeStyle = "#333";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          // Draw angry frown - arc facing upward
+          ctx.arc(tx + thief.w / 2, ty + 20, 6, 1.2 * Math.PI, 1.8 * Math.PI);
+          ctx.stroke();
+          
+          // Angry teeth showing
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(tx + thief.w / 2 - 4, ty + 15, 3, 2);
+          ctx.fillRect(tx + thief.w / 2 + 1, ty + 15, 3, 2);
+          
+          // Wrinkled angry nose
+          ctx.fillStyle = "#3d6b4a";
+          ctx.beginPath();
+          ctx.moveTo(tx + thief.w / 2, ty + 10);
+          ctx.lineTo(tx + thief.w / 2 - 3, ty + 14);
+          ctx.lineTo(tx + thief.w / 2 + 3, ty + 14);
+          ctx.closePath();
+          ctx.fill();
+          
+          // Grinch fingers (long and creepy)
+          ctx.fillStyle = "#4a7c59";
+          const armOffset = Math.sin(Date.now() / 150) * 2;
+          // Left arm
+          ctx.save();
+          ctx.translate(tx + 2, ty + 18);
+          ctx.rotate(-0.3 + armOffset * 0.05);
+          ctx.fillRect(-2, 0, 5, 14);
+          // Long fingers
+          ctx.fillRect(-4, 12, 3, 8);
+          ctx.fillRect(-1, 13, 3, 7);
+          ctx.fillRect(2, 12, 3, 8);
+          ctx.restore();
+          
+          // Right arm
+          ctx.save();
+          ctx.translate(tx + thief.w - 2, ty + 18);
+          ctx.rotate(0.3 - armOffset * 0.05);
+          ctx.fillRect(-3, 0, 5, 14);
+          ctx.fillRect(-4, 12, 3, 8);
+          ctx.fillRect(-1, 13, 3, 7);
+          ctx.fillRect(2, 12, 3, 8);
+          ctx.restore();
+          
+          // Santa hat (stolen!)
+          ctx.fillStyle = "#c62828";
+          ctx.beginPath();
+          ctx.moveTo(tx + thief.w / 2 - 10, ty - 4);
+          ctx.lineTo(tx + thief.w / 2 + 10, ty - 4);
+          ctx.lineTo(tx + thief.w / 2 + 15, ty - 22);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(tx + thief.w / 2 - 12, ty - 6, 24, 5);
+          ctx.beginPath();
+          ctx.arc(tx + thief.w / 2 + 15, ty - 22, 4, 0, Math.PI * 2);
           ctx.fill();
 
           // Health bar (always show when damaged)
@@ -1974,65 +2523,181 @@
         // Shadow
         ctx.fillStyle = "rgba(0,0,0,0.2)";
         ctx.beginPath();
-        ctx.ellipse(px + P.w / 2, GROUND, P.w * 0.6, 6, 0, 0, Math.PI * 2);
+        ctx.ellipse(px + P.w / 2, GROUND, P.w * 0.8, 8, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Body (blue coat)
-        ctx.fillStyle = "#1976d2";
-        ctx.fillRect(px + 3, py + 12, P.w - 6, P.h - 20);
-
-        // Legs
-        const walkOffset =
-          Math.abs(P.vx) > 0.3 ? Math.sin(Date.now() / 80) * 4 : 0;
-        ctx.fillStyle = "#1565c0";
-        ctx.fillRect(px + 6 + walkOffset, py + P.h - 14, 8, 14);
-        ctx.fillRect(px + P.w - 14 - walkOffset, py + P.h - 14, 8, 14);
-
-        // Boots
-        ctx.fillStyle = "#5d4037";
-        ctx.fillRect(px + 4 + walkOffset, py + P.h - 6, 11, 6);
-        ctx.fillRect(px + P.w - 15 - walkOffset, py + P.h - 6, 11, 6);
-
-        // Scarf
-        ctx.fillStyle = "#e53935";
-        ctx.fillRect(px + 5, py + 12, P.w - 10, 5);
-
-        // Head
-        ctx.fillStyle = "#ffcc80";
+        // === SANTA ON SLEIGH ===
+        // Save context and flip if facing left
+        ctx.save();
+        if (!P.right) {
+          // Flip horizontally around the center of the player
+          ctx.translate(px + P.w / 2, 0);
+          ctx.scale(-1, 1);
+          ctx.translate(-(px + P.w / 2), 0);
+        }
+        
+        // Sleigh runners (curved at front)
+        ctx.fillStyle = "#8b4513";
+        ctx.fillRect(px, py + P.h - 6, P.w + 10, 4);
+        ctx.fillRect(px - 5, py + P.h - 10, 4, 8);
+        // Curved front runner
         ctx.beginPath();
-        ctx.arc(px + P.w / 2, py + 8, 9, 0, Math.PI * 2);
+        ctx.arc(px - 5, py + P.h - 10, 6, Math.PI * 0.5, Math.PI * 1.5);
         ctx.fill();
-
-        // Hat
+        
+        // Sleigh body (red)
+        ctx.fillStyle = "#c62828";
+        ctx.fillRect(px + 2, py + P.h - 24, P.w + 4, 18);
+        // Sleigh front curve
+        ctx.beginPath();
+        ctx.arc(px, py + P.h - 15, 12, Math.PI * 0.5, Math.PI * 1.5);
+        ctx.fill();
+        
+        // Gold trim on sleigh
+        ctx.fillStyle = "#ffd700";
+        ctx.fillRect(px + 2, py + P.h - 24, P.w + 4, 3);
+        ctx.fillRect(px + 2, py + P.h - 9, P.w + 4, 3);
+        
+        // Sleigh interior (darker)
+        ctx.fillStyle = "#8b0000";
+        ctx.fillRect(px + 6, py + P.h - 21, P.w - 6, 12);
+        
+        // Present sack in back of sleigh
+        ctx.fillStyle = "#c0392b";
+        ctx.beginPath();
+        ctx.arc(px + P.w - 5, py + P.h - 28, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#ffd700";
+        ctx.beginPath();
+        ctx.moveTo(px + P.w - 10, py + P.h - 38);
+        ctx.lineTo(px + P.w, py + P.h - 38);
+        ctx.lineTo(px + P.w - 5, py + P.h - 32);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Packages visible in sack
+        if (P.packages > 0) {
+          for (let i = 0; i < Math.min(P.packages, 3); i++) {
+            ctx.fillStyle = ["#4fc3f7", "#4caf50", "#ff9800"][i];
+            ctx.fillRect(px + P.w - 12 + i * 5, py + P.h - 35 + i * 3, 6, 5);
+            ctx.fillStyle = "#ffd700";
+            ctx.fillRect(px + P.w - 10 + i * 5, py + P.h - 33 + i * 3, 2, 5);
+          }
+        }
+        
+        // Santa's body (sitting in sleigh)
+        ctx.fillStyle = "#c62828";
+        ctx.fillRect(px + 8, py + 8, 20, 28);
+        
+        // Santa's belly
         ctx.fillStyle = "#c62828";
         ctx.beginPath();
-        ctx.arc(px + P.w / 2, py + 4, 10, Math.PI, 0);
+        ctx.arc(px + 18, py + 25, 12, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // White fur trim
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(px + 8, py + 32, 20, 4);
+        ctx.fillRect(px + 6, py + 8, 24, 4);
+        
+        // Belt
+        ctx.fillStyle = "#333";
+        ctx.fillRect(px + 7, py + 24, 22, 5);
+        ctx.fillStyle = "#ffd700";
+        ctx.fillRect(px + 14, py + 23, 8, 7);
+        
+        // Santa's head
+        ctx.fillStyle = "#ffcc80";
+        ctx.beginPath();
+        ctx.arc(px + 18, py + 2, 10, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // White beard
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.arc(px + 18, py + 10, 10, 0, Math.PI);
+        ctx.fill();
+        ctx.fillRect(px + 8, py + 4, 20, 8);
+        
+        // Santa hat
+        ctx.fillStyle = "#c62828";
+        ctx.beginPath();
+        ctx.moveTo(px + 8, py - 2);
+        ctx.lineTo(px + 28, py - 2);
+        ctx.lineTo(px + 30, py - 18);
+        ctx.closePath();
         ctx.fill();
         ctx.fillStyle = "#fff";
-        ctx.fillRect(px + P.w / 2 - 11, py + 2, 22, 4);
+        ctx.fillRect(px + 6, py - 4, 24, 5);
         ctx.beginPath();
-        ctx.arc(px + P.w / 2, py - 4, 4, 0, Math.PI * 2);
+        ctx.arc(px + 30, py - 18, 5, 0, Math.PI * 2);
         ctx.fill();
-
+        
         // Eyes
         ctx.fillStyle = "#333";
         const eyeDir = P.right ? 2 : -2;
         ctx.beginPath();
-        ctx.arc(px + P.w / 2 + eyeDir - 3, py + 8, 1.5, 0, Math.PI * 2);
+        ctx.arc(px + 14 + eyeDir, py, 2, 0, Math.PI * 2);
         ctx.fill();
         ctx.beginPath();
-        ctx.arc(px + P.w / 2 + eyeDir + 3, py + 8, 1.5, 0, Math.PI * 2);
+        ctx.arc(px + 22 + eyeDir, py, 2, 0, Math.PI * 2);
         ctx.fill();
-
-        // Backpack with packages
-        ctx.fillStyle = "#5d4037";
-        const bpX = P.right ? px - 6 : px + P.w - 6;
-        ctx.fillRect(bpX, py + 14, 10, 18);
-        if (P.packages > 0) {
-          ctx.fillStyle = "#ffd93d";
-          for (let i = 0; i < P.packages; i++) {
-            ctx.fillRect(bpX + 1, py + 15 + i * 5, 8, 4);
-          }
+        
+        // Rosy cheeks
+        ctx.fillStyle = "rgba(255,100,100,0.5)";
+        ctx.beginPath();
+        ctx.arc(px + 10, py + 4, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(px + 26, py + 4, 3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Nose
+        ctx.fillStyle = "#ff6b6b";
+        ctx.beginPath();
+        ctx.arc(px + 18, py + 3, 3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Santa's arm (waving or holding reins)
+        ctx.fillStyle = "#c62828";
+        const armWave = Math.sin(Date.now() / 200) * 5;
+        ctx.save();
+        ctx.translate(px + 5, py + 14);
+        ctx.rotate(-0.3 + armWave * 0.02);
+        ctx.fillRect(0, 0, 6, 16);
+        // White cuff
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 12, 6, 4);
+        // Glove
+        ctx.fillStyle = "#333";
+        ctx.beginPath();
+        ctx.arc(3, 18, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        
+        // Restore from the direction flip
+        ctx.restore();
+        
+        // Turbo effect (flames behind sleigh - always at the back based on direction)
+        if (turboActive) {
+          const flameOffset = Math.sin(Date.now() / 50) * 3;
+          const flameX = P.right ? px - 10 : px + P.w + 10;
+          const flameDir = P.right ? -1 : 1;
+          
+          ctx.fillStyle = "#ff6600";
+          ctx.beginPath();
+          ctx.moveTo(flameX, py + P.h - 10);
+          ctx.lineTo(flameX + flameDir * (20 + flameOffset), py + P.h - 5);
+          ctx.lineTo(flameX, py + P.h);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = "#ffff00";
+          ctx.beginPath();
+          ctx.moveTo(flameX + flameDir * 2, py + P.h - 8);
+          ctx.lineTo(flameX + flameDir * (12 + flameOffset * 0.5), py + P.h - 5);
+          ctx.lineTo(flameX + flameDir * 2, py + P.h - 2);
+          ctx.closePath();
+          ctx.fill();
         }
 
         ctx.restore();
@@ -2117,14 +2782,8 @@
       }
 
       function showCombo(count) {
-        const comboEl = document.getElementById("combo");
-        if (typeof count === "string") {
-          comboEl.textContent = count;
-        } else {
-          comboEl.textContent = `${count}x COMBO! +${count * 20}pts`;
-        }
-        comboEl.classList.add("show");
-        setTimeout(() => comboEl.classList.remove("show"), 600);
+        // Disabled - keeping minimal UI
+        return;
       }
 
       function loop() {
