@@ -55,7 +55,7 @@ function startBackgroundMusic() {
     })
     .catch(() => {});
   bgMusic.currentTime = 0;
-  bgMusic.play();
+  bgMusic.play().catch(() => {});
 }
 const startBtn = document.getElementById("startBtn");
 if (startBtn) {
