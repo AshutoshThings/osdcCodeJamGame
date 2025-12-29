@@ -1,0 +1,2132 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Winter Courier - Frozen City Deliveries</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        position: fixed;
+        overflow: hidden;
+        background: linear-gradient(to bottom, #0a0a20, #1a1a3e);
+        min-height: 100vh;
+        width: 100vw; /* Ensure body covers viewport */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Segoe UI", sans-serif;
+      }
+      #game {
+        position: relative;
+        width: 900px;
+        height: 500px;
+      }
+      canvas {
+        display: block;
+        border: 3px solid #4fc3f7;
+        border-radius: 8px;
+      }
+      #hud {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        right: 10px;
+        display: flex;
+        justify-content: space-between;
+        color: #fff;
+        font-size: 14px;
+        pointer-events: none;
+      }
+      .hud-item {
+        background: rgba(0, 0, 0, 0.7);
+        padding: 6px 12px;
+        border-radius: 4px;
+        border: 1px solid #4fc3f7;
+        backdrop-filter: blur(10px);
+        transition: all 0.3s ease;
+        animation: pulse 2s ease-in-out infinite;
+      }
+      .hud-item:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      .hud-item:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+      .hud-item:nth-child(4) {
+        animation-delay: 0.6s;
+      }
+      .hud-item:nth-child(5) {
+        animation-delay: 0.8s;
+      }
+      .hud-item:hover {
+        transform: scale(1.05);
+        box-shadow: 0 0 15px rgba(79, 195, 247, 0.6);
+      }
+      #stamina-bar {
+        width: 100px;
+        height: 12px;
+        background: #333;
+        border-radius: 6px;
+        overflow: hidden;
+        margin-top: 4px;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+      }
+      #stamina-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #f44, #ff0, #0f0);
+        transition: width 0.1s, box-shadow 0.3s;
+        box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+      }
+      .overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.9);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        text-align: center;
+        border-radius: 8px;
+      }
+      .overlay.hidden {
+        display: none;
+      }
+      h1 {
+        color: #4fc3f7;
+        font-size: 36px;
+        margin-bottom: 10px;
+        animation: slideIn 0.5s ease-out;
+      }
+      h2 {
+        color: #ffd93d;
+        font-size: 18px;
+        margin-bottom: 20px;
+        animation: slideIn 0.5s ease-out;
+      }
+      .info {
+        max-width: 450px;
+        margin-bottom: 20px;
+        line-height: 1.5;
+      }
+      button {
+        background: linear-gradient(#4fc3f7, #0288d1);
+        border: none;
+        color: #fff;
+        padding: 12px 30px;
+        font-size: 16px;
+        border-radius: 25px;
+        cursor: pointer;
+        animation: glow 2s ease-in-out infinite;
+        transition: all 0.3s;
+      }
+      button:hover {
+        transform: scale(1.1);
+        box-shadow: 0 0 25px rgba(79, 195, 247, 1);
+      }
+      .key {
+        background: #4fc3f7;
+        color: #000;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-weight: bold;
+      }
+      #target {
+        position: absolute;
+        top: 55px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: #ffd93d;
+        padding: 5px 15px;
+        border-radius: 15px;
+        border: 1px solid #ffd93d;
+        font-size: 13px;
+      }
+      #target.hidden {
+        display: none;
+      }
+      #minimap {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        border: 2px solid #4fc3f7;
+        border-radius: 4px;
+        background: rgba(0, 0, 0, 0.6);
+        box-shadow: 0 0 10px rgba(79, 195, 247, 0.5);
+      }
+      #pause {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.95);
+        color: #fff;
+        padding: 30px 50px;
+        border-radius: 15px;
+        border: 2px solid #4fc3f7;
+        text-align: center;
+        display: none;
+        z-index: 1000;
+        box-shadow: 0 0 30px rgba(79, 195, 247, 0.8);
+      }
+      #pause.show {
+        display: block;
+      }
+      .particle {
+        position: absolute;
+        pointer-events: none;
+        border-radius: 50%;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+        50% {
+          transform: scale(1.05);
+          opacity: 0.9;
+        }
+      }
+      @keyframes slideIn {
+        from {
+          transform: translateY(-20px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+      @keyframes glow {
+        0%,
+        100% {
+          box-shadow: 0 0 5px rgba(79, 195, 247, 0.5);
+        }
+        50% {
+          box-shadow: 0 0 15px rgba(79, 195, 247, 1);
+        }
+      }
+      .combo {
+        position: absolute;
+        top: 30%;
+        left: 50%;
+        transform: translateX(-50%);
+        color: #ffd93d;
+        font-size: 32px;
+        font-weight: bold;
+        text-shadow: 0 0 10px rgba(255, 217, 61, 0.8);
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+      .combo.show {
+        opacity: 1;
+        animation: comboPop 0.6s ease-out;
+      }
+      @keyframes comboPop {
+        0% {
+          transform: translateX(-50%) scale(0.5);
+          opacity: 0;
+        }
+        50% {
+          transform: translateX(-50%) scale(1.2);
+          opacity: 1;
+        }
+        100% {
+          transform: translateX(-50%) scale(1);
+          opacity: 0;
+        }
+      }
+      .achievement {
+        position: absolute;
+        top: 20%;
+        right: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        padding: 15px 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        transform: translateX(400px);
+        opacity: 0;
+        transition: all 0.5s ease;
+        z-index: 100;
+        pointer-events: none;
+      }
+      .achievement.show {
+        transform: translateX(0);
+        opacity: 1;
+      }
+      .achievement-icon {
+        font-size: 24px;
+        margin-right: 10px;
+      }
+      .score-popup {
+        position: absolute;
+        pointer-events: none;
+        color: #4caf50;
+        font-size: 18px;
+        font-weight: bold;
+        text-shadow: 0 0 10px rgba(76, 175, 80, 0.8);
+        z-index: 200;
+        opacity: 0;
+      }
+      .score-popup.show {
+        animation: scoreFloat 1s ease-out forwards;
+      }
+      @keyframes scoreFloat {
+        0% {
+          transform: translateY(0) scale(0.5);
+          opacity: 0;
+        }
+        20% {
+          opacity: 1;
+          transform: translateY(-10px) scale(1.2);
+        }
+        100% {
+          transform: translateY(-60px) scale(0.8);
+          opacity: 0;
+        }
+      }
+      .level-up {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(0);
+        color: #ffd93d;
+        font-size: 48px;
+        font-weight: bold;
+        text-shadow: 0 0 20px rgba(255, 217, 61, 0.8);
+        z-index: 300;
+        pointer-events: none;
+        opacity: 0;
+      }
+      .level-up.show {
+        animation: levelUpPop 1.5s ease-out forwards;
+      }
+      @keyframes levelUpPop {
+        0% {
+          transform: translate(-50%, -50%) scale(0);
+          opacity: 0;
+        }
+        30% {
+          transform: translate(-50%, -50%) scale(1.3);
+          opacity: 1;
+        }
+        60% {
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 1;
+        }
+        100% {
+          transform: translate(-50%, -50%) scale(0.8);
+          opacity: 0;
+        }
+      }
+      .delivery-success {
+        position: absolute;
+        top: 40%;
+        left: 50%;
+        transform: translateX(-50%) scale(0);
+        color: #4caf50;
+        font-size: 36px;
+        font-weight: bold;
+        text-shadow: 0 0 15px rgba(76, 175, 80, 0.8);
+        z-index: 250;
+        pointer-events: none;
+        opacity: 0;
+      }
+      .delivery-success.show {
+        animation: deliveryPop 0.8s ease-out forwards;
+      }
+      @keyframes deliveryPop {
+        0% {
+          transform: translateX(-50%) scale(0) rotate(-10deg);
+          opacity: 0;
+        }
+        50% {
+          transform: translateX(-50%) scale(1.2) rotate(5deg);
+          opacity: 1;
+        }
+        100% {
+          transform: translateX(-50%) scale(1) rotate(0deg);
+          opacity: 0;
+        }
+      }
+      canvas {
+        box-shadow: 0 0 30px rgba(79, 195, 247, 0.3);
+        transition: box-shadow 0.3s;
+      }
+      canvas:hover {
+        box-shadow: 0 0 40px rgba(79, 195, 247, 0.5);
+      }
+      .stats-panel {
+        position: absolute;
+        bottom: 80px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 10px 15px;
+        border-radius: 8px;
+        border: 1px solid #4fc3f7;
+        font-size: 12px;
+        color: #fff;
+        opacity: 0.7;
+        transition: opacity 0.3s;
+        pointer-events: none;
+      }
+      .stats-panel:hover {
+        opacity: 1;
+      }
+      .stats-item {
+        margin: 3px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game">
+      <canvas id="c" width="900" height="500"></canvas>
+      <canvas id="minimap" width="160" height="60"></canvas>
+
+      <div id="hud" class="hidden">
+        <div class="hud-item">Level: <span id="lvl">1</span></div>
+        <div class="hud-item">Score: <span id="scr">0</span></div>
+        <div class="hud-item">📦 <span id="pkg">0</span>/3</div>
+        <div class="hud-item">
+          Deliveries: <span id="del">0</span>/<span id="need">5</span>
+        </div>
+        <div class="hud-item" id="combo-hud" style="opacity: 0">
+          🔥 Combo: <span id="combo-count">0</span>x
+        </div>
+        <div
+          class="hud-item"
+          id="thief-warning"
+          style="opacity: 0; color: #ff4444; border-color: #ff4444"
+        >
+          ⚠️ THIEF ALERT!
+        </div>
+        <div
+          class="hud-item"
+          id="hp-low-warning"
+          style="
+            opacity: 0;
+            color: #ff4444;
+            border-color: #ff4444;
+            animation: none;
+          "
+        >
+          ⚠️ HP LOW!
+        </div>
+        <div class="hud-item">
+          Stamina
+          <div id="stamina-bar"><div id="stamina-fill"></div></div>
+        </div>
+      </div>
+
+      <div
+        id="mission"
+        class="hidden"
+        style="
+          position: absolute;
+          top: 70px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: rgba(0, 0, 0, 0.9);
+          color: #ffd93d;
+          padding: 10px 20px;
+          border-radius: 10px;
+          border: 2px solid #ffd93d;
+          font-size: 14px;
+          text-align: center;
+          z-index: 50;
+        "
+      >
+        <div style="font-weight: bold; margin-bottom: 5px">📋 MISSION:</div>
+        <div id="mission-text">Complete deliveries</div>
+      </div>
+
+      <div id="target" class="hidden">
+        🏠 <span id="tname">--</span> | <span id="tdist">--</span>m
+      </div>
+
+      <div id="start" class="overlay">
+        <h1>❄️ Winter Courier ❄️</h1>
+        <h2>Frozen City Deliveries</h2>
+        <div class="info">
+          Navigate the frozen city! Pick up packages from the warehouse and
+          deliver to houses.<br /><br />
+          <span class="key">A</span> <span class="key">D</span> Move |
+          <span class="key">W</span> / <span class="key">Space</span> Jump |
+          <span class="key">Shift</span> Sprint | <span class="key">P</span> /
+          <span class="key">ESC</span> Pause<br /><br />
+          📦 Yellow = Warehouse | 🏠 Red marker = Needs delivery<br />
+          🧊 Avoid falling ice! | ⚡⭐ Collect power-ups!<br />
+          🦹 Red Thief = Steals packages! Jump on him to defeat!<br />
+          💡 Tip: Land on thief's head to damage (like Mario)!<br />
+          Chain deliveries for combo bonuses!
+        </div>
+        <button id="startBtn">Start Game</button>
+      </div>
+
+      <div id="gameover" class="overlay hidden">
+        <h1>❄️ Game Over ❄️</h1>
+        <h2>Final Score: <span id="fscore">0</span></h2>
+        <div class="info">
+          Level <span id="flvl">1</span> | Deliveries: <span id="fdel">0</span>
+        </div>
+        <button id="restartBtn">Play Again</button>
+      </div>
+
+      <div id="pause">
+        <h2>⏸️ Paused</h2>
+        <p>
+          Press <span class="key">P</span> or <span class="key">ESC</span> to
+          resume
+        </p>
+      </div>
+
+      <div id="combo" class="combo"></div>
+      <div id="achievement" class="achievement">
+        <span class="achievement-icon"></span>
+        <span class="achievement-text"></span>
+      </div>
+      <div id="level-up" class="level-up">LEVEL UP!</div>
+      <div id="delivery-success" class="delivery-success">✓ DELIVERED!</div>
+      <div id="stats" class="stats-panel hidden">
+        <div class="stats-item">⏱️ Time: <span id="game-time">0</span>s</div>
+        <div class="stats-item">
+          ⚡ Best Combo: <span id="best-combo">0</span>
+        </div>
+        <div class="stats-item">
+          🎯 Accuracy: <span id="accuracy">100</span>%
+        </div>
+      </div>
+    </div>
+    <script src="audio.js"></script>
+
+    <script>
+      const canvas = document.getElementById("c");
+      const ctx = canvas.getContext("2d");
+      const mini = document.getElementById("minimap");
+      const mctx = mini.getContext("2d");
+
+      const W = canvas.width,
+        H = canvas.height;
+      const WORLD_W = 3000;
+      const GROUND = H - 50;
+
+      let state = "start";
+      let level = 1,
+        score = 0,
+        delivered = 0,
+        needed = 5;
+
+      // Camera
+      let camX = 0;
+
+      // Player
+      const P = {
+        x: 150,
+        y: GROUND - 45,
+        w: 30,
+        h: 45,
+        vx: 0,
+        vy: 0,
+        stamina: 100,
+        packages: 0,
+        grounded: false,
+        right: true,
+      };
+
+      const GRAV = 0.6,
+        FRIC = 0.88,
+        ACCEL = 0.9,
+        SPRINT = 1.6,
+        MAX_V = 8,
+        JUMP = -13;
+
+      // Objects - initialize with defaults
+      let warehouse = { x: 80, y: GROUND - 90, w: 120, h: 90, stock: 10 };
+      let houses = [];
+      let platforms = [];
+      let iceBlocks = [];
+      let snow = [];
+      let particles = [];
+      let powerUps = [];
+      let combo = 0;
+      let comboTime = 0;
+      let screenShake = 0;
+      let thief = null;
+      let thiefSpawnTime = 0;
+      let thiefDefeated = false;
+      let thiefHitCooldown = 0;
+      let damageNumbers = [];
+      let scorePopups = [];
+      let playerTrail = [];
+      let gameStartTime = 0;
+      let bestCombo = 0;
+      let totalDeliveries = 0;
+      let successfulDeliveries = 0;
+      let currentMission = null;
+      let missionProgress = 0;
+      let missionTarget = 0;
+
+      // Particle system
+      function createParticles(x, y, color, count = 10) {
+        for (let i = 0; i < count; i++) {
+          particles.push({
+            x: x,
+            y: y,
+            vx: (Math.random() - 0.5) * 4,
+            vy: (Math.random() - 0.5) * 4,
+            life: 1,
+            decay: 0.02 + Math.random() * 0.02,
+            size: 2 + Math.random() * 3,
+            color: color,
+          });
+        }
+      }
+
+      function updateParticles() {
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.1; // gravity
+          p.life -= p.decay;
+          if (p.life <= 0) particles.splice(i, 1);
+        }
+      }
+
+      function drawParticles() {
+        for (const p of particles) {
+          ctx.save();
+          ctx.globalAlpha = p.life;
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          // Account for camera offset
+          ctx.arc(p.x - camX, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      function init() {
+        // Warehouse
+        warehouse = { x: 80, y: GROUND - 90, w: 120, h: 90, stock: 10 };
+
+        // Houses
+        houses = [];
+        const spots = [400, 700, 1000, 1400, 1800, 2200, 2500, 2800];
+        spots.forEach((x, i) => {
+          houses.push({
+            x: x + Math.random() * 100 - 50,
+            y: GROUND - 70,
+            w: 80,
+            h: 70,
+            color: ["#c0392b", "#27ae60", "#2980b9", "#8e44ad", "#d35400"][
+              i % 5
+            ],
+            needs: false,
+            done: false,
+            name: "House " + (i + 1),
+            missionTarget: false,
+          });
+        });
+
+        // Platforms
+        platforms = [];
+        for (let x = 300; x < WORLD_W - 100; x += 250 + Math.random() * 150) {
+          platforms.push({
+            x: x,
+            y: GROUND - 100 - Math.random() * 80,
+            w: 80 + Math.random() * 40,
+            h: 14,
+            moving: Math.random() > 0.5,
+            dir: 1,
+            speed: 1 + Math.random(),
+            start: x,
+            range: 60,
+          });
+        }
+
+        // Ice
+        iceBlocks = [];
+        for (let i = 0; i < 12 + level * 2; i++) {
+          iceBlocks.push({
+            x: Math.random() * WORLD_W,
+            y: -Math.random() * 600,
+            size: 15 + Math.random() * 10,
+            speed: 2 + Math.random() * 2 + level * 0.3,
+            rot: 0,
+          });
+        }
+
+        // Snow
+        snow = [];
+        for (let i = 0; i < 100; i++) {
+          snow.push({
+            x: Math.random() * WORLD_W,
+            y: Math.random() * H,
+            r: 1 + Math.random() * 2,
+            s: 0.5 + Math.random(),
+          });
+        }
+
+        // Power-ups
+        powerUps = [];
+        for (let i = 0; i < 3 + level; i++) {
+          powerUps.push({
+            x: 500 + Math.random() * (WORLD_W - 1000),
+            y: GROUND - 120 - Math.random() * 100,
+            type: Math.random() > 0.5 ? "stamina" : "speed",
+            rot: 0,
+            collected: false,
+          });
+        }
+
+        // Thief
+        thief = null;
+        thiefSpawnTime = 180 + level * 60; // Spawns after 3-5 seconds
+        thiefDefeated = false;
+        thiefHitCooldown = 0;
+        damageNumbers = [];
+
+        // Reset player
+        P.x = 150;
+        P.y = GROUND - 45;
+        P.vx = 0;
+        P.vy = 0;
+        P.stamina = 100;
+        P.packages = 0;
+
+        delivered = 0;
+        needed = 4 + level * 2;
+        camX = 0;
+        combo = 0;
+        comboTime = 0;
+        particles = [];
+        screenShake = 0;
+        missionProgress = 0;
+
+        // Generate mission for this level
+        generateMission();
+
+        assignDeliveries();
+        updateHUD();
+      }
+
+      function generateMission() {
+        const missionTypes = [
+          {
+            type: "deliver",
+            text: (target) => `Deliver ${target} packages`,
+            target: 3 + level,
+            progress: () => delivered,
+          },
+          // ... (other mission types unchanged)
+          {
+            type: "specific",
+            text: (houses, target) => {
+              const targetHouses = houses.filter((h) => h.missionTarget);
+              return `Deliver to: ${targetHouses
+                .map((h) => h.name)
+                .join(", ")}`;
+            },
+            target: (houses) => {
+              const availableHouses = houses.filter((h) => !h.done);
+              return Math.min(
+                2 + Math.floor(level / 2),
+                availableHouses.length
+              );
+            },
+            progress: (houses) => {
+              const targetHouses = houses.filter((h) => h.missionTarget);
+              return targetHouses.filter((h) => h.done).length;
+            },
+            specific: true,
+          },
+        ];
+
+        let candidates = missionTypes.slice();
+
+        const availablePowerUps = powerUps.filter((pu) => !pu.collected).length;
+        const powerUpMissionTarget = 2 + level;
+        if (availablePowerUps < powerUpMissionTarget) {
+          candidates = candidates.filter((m) => m.type !== "powerups");
+        }
+
+        const availableHouses = houses.filter((h) => !h.done);
+        const specificMissionTarget = Math.min(
+          2 + Math.floor(level / 2),
+          availableHouses.length
+        );
+        if (specificMissionTarget === 0) {
+          candidates = candidates.filter((m) => m.type !== "specific");
+        }
+
+        // Selection logic
+        let selectedMission;
+        if (level === 1) {
+          selectedMission =
+            candidates.find((m) => m.type === "deliver") || candidates[0];
+        } else if (level % 3 === 0) {
+          selectedMission =
+            candidates.find((m) => m.type === "thief") || candidates[0];
+        } else {
+          selectedMission =
+            candidates[Math.floor(Math.random() * candidates.length)] ||
+            missionTypes[0];
+        }
+
+        // Calculate final target
+        const finalTarget =
+          typeof selectedMission.target === "function"
+            ? selectedMission.target(houses)
+            : selectedMission.target;
+
+        currentMission = {
+          type: selectedMission.type,
+          text: "", // Placeholder until the text is correctly generated below
+          target: finalTarget,
+          progress: selectedMission.progress,
+          specific: selectedMission.specific || false,
+        };
+
+        // For specific missions, mark target houses
+        if (currentMission.specific && currentMission.type === "specific") {
+          // Reset missionTarget flag first
+          houses.forEach((h) => (h.missionTarget = false));
+          const targetHouses = houses
+            .filter((h) => !h.done)
+            .slice(0, currentMission.target);
+          targetHouses.forEach((h) => (h.missionTarget = true));
+
+          // Generate text *after* marking targets (requires houses and target)
+          currentMission.text = selectedMission.text(
+            houses,
+            currentMission.target
+          );
+        } else {
+          // Generate text for non-specific missions (only requires target)
+          // Check if text is a function, and pass the target
+          currentMission.text =
+            typeof selectedMission.text === "function"
+              ? selectedMission.text(currentMission.target)
+              : selectedMission.text;
+        }
+
+        missionTarget = currentMission.target;
+        missionProgress = currentMission.progress(houses); // Initial progress check
+
+        // Update mission display
+        document.getElementById(
+          "mission-text"
+        ).textContent = `${currentMission.text} (${missionProgress}/${missionTarget})`;
+        document.getElementById("mission").classList.remove("hidden");
+      }
+
+      function assignDeliveries() {
+        houses.forEach((h) => (h.needs = false));
+
+        // Only assign deliveries to houses that are not done and, if applicable, are mission targets
+        let avail = houses.filter((h) => !h.done);
+
+        if (currentMission && currentMission.type === "specific") {
+          avail = houses.filter((h) => h.missionTarget && !h.done);
+        }
+
+        const n = Math.min(P.packages > 0 ? 1 : 3, avail.length); // Max 3 deliveries needed at once
+        for (let i = 0; i < n; i++) {
+          const idx = Math.floor(Math.random() * avail.length);
+          avail[idx].needs = true;
+          avail.splice(idx, 1);
+        }
+
+        // If no houses need delivery, but we have packages, find the nearest available one
+        if (P.packages > 0 && houses.filter((h) => h.needs).length === 0) {
+          let fallbackHouses = houses.filter((h) => !h.done);
+          if (currentMission && currentMission.type === "specific") {
+            fallbackHouses = fallbackHouses.filter((h) => h.missionTarget);
+          }
+          if (fallbackHouses.length > 0) {
+            const nearest = fallbackHouses.reduce(
+              (prev, curr) =>
+                Math.abs(curr.x - P.x) < Math.abs(prev.x - P.x) ? curr : prev,
+              fallbackHouses[0]
+            );
+            nearest.needs = true;
+          }
+        }
+      }
+
+      function updateHUD() {
+        document.getElementById("lvl").textContent = level;
+        document.getElementById("scr").textContent = score;
+        document.getElementById("pkg").textContent = P.packages;
+        document.getElementById("del").textContent = delivered;
+        document.getElementById("need").textContent = needed;
+        document.getElementById("stamina-fill").style.width = P.stamina + "%";
+
+        // Combo display
+        const comboHud = document.getElementById("combo-hud");
+        const comboCount = document.getElementById("combo-count");
+        if (combo > 0) {
+          comboHud.style.opacity = "1";
+          comboCount.textContent = combo;
+          comboHud.style.color = combo > 5 ? "#ffd93d" : "#fff";
+        } else {
+          comboHud.style.opacity = "0";
+        }
+
+        // Thief warning
+        const thiefWarning = document.getElementById("thief-warning");
+        if (thief && !thiefDefeated) {
+          const dist = Math.abs(P.x - thief.x);
+          if (dist < 300) {
+            thiefWarning.style.opacity = "1";
+            const pulse = 0.7 + Math.sin(Date.now() / 100) * 0.3;
+            thiefWarning.style.opacity = pulse;
+          } else {
+            thiefWarning.style.opacity = "0.5";
+          }
+        } else {
+          thiefWarning.style.opacity = "0";
+        }
+
+        // HP Low warning
+        const hpLowWarning = document.getElementById("hp-low-warning");
+        if (P.stamina < 30) {
+          const pulse = 0.5 + Math.sin(Date.now() / 150) * 0.5;
+          hpLowWarning.style.opacity = pulse;
+        } else {
+          hpLowWarning.style.opacity = "0";
+        }
+
+        // Update mission progress
+        if (currentMission) {
+          missionProgress = currentMission.progress(houses);
+          const missionEl = document.getElementById("mission-text");
+          missionEl.textContent = `${currentMission.text} (${missionProgress}/${missionTarget})`;
+        }
+
+        // Stamina bar color based on level
+        const staminaFill = document.getElementById("stamina-fill");
+        if (P.stamina > 60) {
+          staminaFill.style.background =
+            "linear-gradient(90deg, #0f0, #4caf50)";
+        } else if (P.stamina > 30) {
+          staminaFill.style.background =
+            "linear-gradient(90deg, #ff0, #ffd93d)";
+        } else {
+          staminaFill.style.background =
+            "linear-gradient(90deg, #f44, #d32f2f)";
+        }
+
+        const t = houses.find((h) => h.needs);
+        if (P.packages > 0 && t) {
+          document.getElementById("target").classList.remove("hidden");
+          document.getElementById("tname").textContent = t.name;
+          document.getElementById("tdist").textContent = Math.round(
+            Math.abs(t.x - P.x) / 8
+          );
+        } else {
+          document.getElementById("target").classList.add("hidden");
+        }
+      }
+
+      // Input
+      const keys = {};
+      let paused = false;
+      document.addEventListener("keydown", (e) => {
+        keys[e.code] = true;
+        if (["Space", "ArrowUp", "ArrowDown"].includes(e.code))
+          e.preventDefault();
+        if ((e.code === "KeyP" || e.code === "Escape") && state === "play") {
+          paused = !paused;
+          document.getElementById("pause").classList.toggle("show", paused);
+        }
+      });
+      document.addEventListener("keyup", (e) => (keys[e.code] = false));
+
+      document.getElementById("startBtn").onclick = startGame;
+      document.getElementById("restartBtn").onclick = startGame;
+
+      function startGame() {
+        state = "play";
+        level = 1;
+        score = 0;
+        gameStartTime = Date.now();
+        bestCombo = 0;
+        totalDeliveries = 0;
+        successfulDeliveries = 0;
+        playerTrail = [];
+        scorePopups = [];
+        document.getElementById("start").classList.add("hidden");
+        document.getElementById("gameover").classList.add("hidden");
+        document.getElementById("hud").classList.remove("hidden");
+        document.getElementById("stats").classList.remove("hidden");
+        init();
+      }
+
+      function endGame() {
+        state = "over";
+        document.getElementById("hud").classList.add("hidden");
+        document.getElementById("target").classList.add("hidden");
+        document.getElementById("mission").classList.add("hidden");
+        document.getElementById("stats").classList.add("hidden");
+        document.getElementById("gameover").classList.remove("hidden");
+        document.getElementById("fscore").textContent = score;
+        document.getElementById("flvl").textContent = level;
+        document.getElementById("fdel").textContent = delivered;
+        window.dispatchEvent(new Event("game-over"));
+      }
+
+      function nextLevel() {
+        level++;
+        score += 500 + combo * 50;
+        createParticles(P.x + P.w / 2, P.y + P.h / 2, "#4fc3f7", 30);
+        screenShake = 4; // Minimal shake for level up
+        // Show level up animation
+        const levelUpEl = document.getElementById("level-up");
+        levelUpEl.textContent = `LEVEL ${level}!`;
+        levelUpEl.classList.add("show");
+        setTimeout(() => levelUpEl.classList.remove("show"), 1500);
+
+        // Reset completed houses for next level
+        houses.forEach((h) => (h.done = false));
+
+        init();
+      }
+
+      // Score popup system
+      function showScorePopup(x, y, text, color = "#4caf50") {
+        scorePopups.push({
+          x: x,
+          y: y,
+          text: text,
+          color: color,
+          life: 60,
+          vy: -2,
+        });
+      }
+
+      // Achievement system
+      function showAchievement(icon, text) {
+        const achEl = document.getElementById("achievement");
+        achEl.querySelector(".achievement-icon").textContent = icon;
+        achEl.querySelector(".achievement-text").textContent = text;
+        achEl.classList.add("show");
+        setTimeout(() => achEl.classList.remove("show"), 3000);
+      }
+
+      // Update player trail
+      function updateTrail() {
+        if (Math.abs(P.vx) > 0.5 || Math.abs(P.vy) > 0.5) {
+          playerTrail.push({
+            x: P.x + P.w / 2,
+            y: P.y + P.h / 2,
+            life: 20,
+            alpha: 0.5,
+          });
+        }
+
+        for (let i = playerTrail.length - 1; i >= 0; i--) {
+          playerTrail[i].life--;
+          playerTrail[i].alpha = playerTrail[i].life / 20;
+          if (playerTrail[i].life <= 0) playerTrail.splice(i, 1);
+        }
+      }
+
+      function update() {
+        if (state !== "play" || paused) return;
+
+        // Input
+        const sprint = keys["ShiftLeft"] || keys["ShiftRight"];
+        let acc = ACCEL;
+        if (sprint && P.stamina > 0) {
+          acc *= SPRINT;
+          P.stamina -= 0.5;
+        }
+
+        if (keys["KeyA"] || keys["ArrowLeft"]) {
+          P.vx -= acc;
+          P.right = false;
+        }
+        if (keys["KeyD"] || keys["ArrowRight"]) {
+          P.vx += acc;
+          P.right = true;
+        }
+
+        if (
+          (keys["KeyW"] || keys["Space"] || keys["ArrowUp"]) &&
+          P.grounded &&
+          P.stamina >= 8
+        ) {
+          P.vy = JUMP;
+          P.grounded = false;
+          P.stamina -= 8;
+        }
+
+        // Physics
+        P.vx *= FRIC;
+        if (P.vx > MAX_V) P.vx = MAX_V;
+        if (P.vx < -MAX_V) P.vx = -MAX_V;
+        P.vy += GRAV;
+
+        P.x += P.vx;
+        P.y += P.vy;
+
+        // Bounds
+        if (P.x < 10) {
+          P.x = 10;
+          P.vx = 0;
+        }
+        if (P.x + P.w > WORLD_W - 10) {
+          P.x = WORLD_W - P.w - 10;
+          P.vx = 0;
+        }
+
+        // Ground
+        P.grounded = false;
+        if (P.y + P.h >= GROUND) {
+          P.y = GROUND - P.h;
+          P.vy = 0;
+          P.grounded = true;
+        }
+
+        // Platforms
+        for (const pl of platforms) {
+          if (pl.moving) {
+            pl.x += pl.dir * pl.speed;
+            if (pl.x < pl.start - pl.range || pl.x > pl.start + pl.range)
+              pl.dir *= -1;
+          }
+          if (
+            P.vy >= 0 &&
+            P.x + P.w > pl.x &&
+            P.x < pl.x + pl.w &&
+            P.y + P.h >= pl.y &&
+            P.y + P.h <= pl.y + pl.h + 12
+          ) {
+            P.y = pl.y - P.h;
+            P.vy = 0;
+            P.grounded = true;
+            if (pl.moving) P.x += pl.dir * pl.speed;
+          }
+        }
+
+        // Attack thief by jumping on them (like Mario)
+        if (thief && !thiefDefeated) {
+          const distX = Math.abs(P.x + P.w / 2 - (thief.x + thief.w / 2));
+          const distY = P.y - thief.y;
+          const horizontalOverlap =
+            P.x < thief.x + thief.w && P.x + P.w > thief.x;
+
+          // Hit cooldown to prevent multiple hits in one jump
+          if (thiefHitCooldown > 0) thiefHitCooldown--;
+
+          // Player jumping on thief (improved collision detection)
+          const isAboveThief = distY > -5 && distY < 50;
+          const isLanding = P.vy > 0 || (P.grounded && distY < 20);
+          const isHorizontallyAligned = distX < (P.w + thief.w) / 2 + 5;
+
+          if (
+            horizontalOverlap &&
+            isAboveThief &&
+            isLanding &&
+            isHorizontallyAligned &&
+            thiefHitCooldown === 0
+          ) {
+            // Damage the thief
+            thief.health--;
+            thiefHitCooldown = 20; // Prevent multiple hits
+            createParticles(thief.x + thief.w / 2, thief.y, "#ff4444", 25);
+            screenShake = 2; // Minimal shake intensity
+            P.vy = -12; // Better bounce off
+            score += 100;
+            showScorePopup(thief.x + thief.w / 2, thief.y, "+100", "#ffd93d");
+
+            // Add damage number
+            damageNumbers.push({
+              x: thief.x + thief.w / 2,
+              y: thief.y - 10,
+              value: "-1",
+              life: 60,
+              vy: -2,
+            });
+
+            // Stun thief briefly
+            thief.vx *= 0.3;
+
+            if (thief.health <= 0) {
+              // Thief defeated!
+              createParticles(
+                thief.x + thief.w / 2,
+                thief.y + thief.h / 2,
+                "#4caf50",
+                40
+              );
+              screenShake = 3; // Minimal shake intensity
+              score += 500;
+              showScorePopup(
+                P.x + P.w / 2,
+                P.y,
+                "+500 THIEF DEFEATED!",
+                "#4caf50"
+              );
+              showAchievement("🦹", "Thief Defeated!");
+              thiefDefeated = true;
+              thief = null;
+              showCombo("THIEF DEFEATED!");
+              // Check mission completion
+              if (currentMission && currentMission.type === "thief") {
+                missionProgress = 1;
+                if (missionProgress >= missionTarget) {
+                  setTimeout(nextLevel, 500);
+                }
+              }
+            }
+          }
+
+          // Thief attacks player (if too close)
+          if (
+            thief &&
+            distX < 35 &&
+            P.packages > 0 &&
+            thief.stealCooldown === 0
+          ) {
+            // Push player away when thief steals
+            window.dispatchEvent(new Event("player-hit"));
+            P.stamina -= 5;
+            P.vx = P.x > thief.x ? 8 : -8;
+            P.vy = -5;
+          }
+        }
+
+        // Update damage numbers
+        for (let i = damageNumbers.length - 1; i >= 0; i--) {
+          const dn = damageNumbers[i];
+          dn.y += dn.vy;
+          dn.vy *= 0.95;
+          dn.life--;
+          if (dn.life <= 0) damageNumbers.splice(i, 1);
+        }
+
+        // Stamina recovery
+        if (Math.abs(P.vx) < 0.5 && P.grounded && P.stamina < 100)
+          P.stamina += 0.3;
+
+        // Warehouse pickup
+        if (
+          P.x < warehouse.x + warehouse.w &&
+          P.x + P.w > warehouse.x &&
+          P.y < warehouse.y + warehouse.h &&
+          P.y + P.h > warehouse.y
+        ) {
+          if (P.packages < 3 && warehouse.stock > 0) {
+            P.packages++;
+            warehouse.stock--;
+            score += 20;
+            showScorePopup(
+              warehouse.x + warehouse.w / 2,
+              warehouse.y,
+              "+20",
+              "#ffd93d"
+            );
+            createParticles(
+              warehouse.x + warehouse.w / 2,
+              warehouse.y + warehouse.h / 2,
+              "#ffd93d",
+              8
+            );
+            assignDeliveries(); // Re-assign on package pickup
+          }
+        }
+
+        // Deliveries
+        for (const h of houses) {
+          if (
+            h.needs &&
+            P.packages > 0 &&
+            P.x < h.x + h.w &&
+            P.x + P.w > h.x &&
+            P.y + P.h >= h.y
+          ) {
+            h.needs = false;
+            h.done = true;
+            P.packages--;
+            delivered++;
+
+            // Combo system
+            combo++;
+            comboTime = 300; // 5 seconds at 60fps
+            const comboBonus = Math.min(combo * 20, 200);
+            score += 150 + comboBonus;
+            totalDeliveries++;
+            successfulDeliveries++;
+
+            // Update best combo
+            if (combo > bestCombo) {
+              bestCombo = combo;
+            }
+
+            // Show delivery success animation
+            const delSuccess = document.getElementById("delivery-success");
+            delSuccess.classList.add("show");
+            setTimeout(() => delSuccess.classList.remove("show"), 800);
+
+            // Show score popup
+            showScorePopup(
+              h.x + h.w / 2,
+              h.y,
+              `+${150 + comboBonus}`,
+              "#4caf50"
+            );
+
+            // Achievements
+            if (combo === 5) showAchievement("🔥", "5x Combo!");
+            if (combo === 10) showAchievement("🔥🔥", "10x Combo Master!");
+            if (delivered === 10) showAchievement("📦", "10 Deliveries!");
+            if (delivered === 25) showAchievement("🏆", "25 Deliveries!");
+
+            // Visual feedback
+            createParticles(h.x + h.w / 2, h.y, "#4caf50", 20);
+            screenShake = 2; // Minimal shake intensity
+
+            warehouse.stock = Math.min(warehouse.stock + 2, 12);
+
+            // Check mission completion
+            if (currentMission) {
+              missionProgress = currentMission.progress(houses); // Re-calculate progress
+              if (missionProgress >= missionTarget) {
+                setTimeout(nextLevel, 500);
+              } else {
+                assignDeliveries();
+              }
+            } else if (delivered >= needed) {
+              setTimeout(nextLevel, 500); // Fallback to old system
+            } else {
+              assignDeliveries();
+            }
+          }
+        }
+
+        // Combo decay
+        if (comboTime > 0) {
+          comboTime--;
+          if (comboTime === 0) {
+            if (combo > 3) {
+              showCombo(combo);
+            }
+            combo = 0;
+          }
+        }
+
+        // Power-ups
+        for (const pu of powerUps) {
+          if (
+            !pu.collected &&
+            P.x < pu.x + 20 &&
+            P.x + P.w > pu.x &&
+            P.y < pu.y + 20 &&
+            P.y + P.h > pu.y
+          ) {
+            pu.collected = true;
+            createParticles(
+              pu.x + 10,
+              pu.y + 10,
+              pu.type === "stamina" ? "#4fc3f7" : "#ffd93d",
+              15
+            );
+            if (pu.type === "stamina") {
+              P.stamina = Math.min(100, P.stamina + 30);
+              showScorePopup(pu.x + 10, pu.y + 10, "⚡ +30 Stamina", "#4fc3f7");
+            } else {
+              score += 100;
+              showScorePopup(pu.x + 10, pu.y + 10, "⭐ +100", "#ffd93d");
+            }
+            // Check mission completion
+            if (currentMission && currentMission.type === "powerups") {
+              missionProgress = currentMission.progress();
+              if (missionProgress >= missionTarget) {
+                setTimeout(nextLevel, 500);
+              }
+            }
+          }
+        }
+
+        // Thief
+        if (thiefSpawnTime > 0) {
+          thiefSpawnTime--;
+          if (thiefSpawnTime === 0 && !thiefDefeated) {
+            // Spawn thief away from player
+            thief = {
+              x: P.x + (Math.random() > 0.5 ? 400 : -400),
+              y: GROUND - 40,
+              w: 28,
+              h: 40,
+              vx: 0,
+              vy: 0,
+              speed: 2 + level * 0.3,
+              health: 2 + level,
+              maxHealth: 2 + level,
+              right: true,
+              grounded: false,
+              stealCooldown: 0,
+              suspicious: false,
+              suspiciousTime: 0,
+              lastSeen: 0,
+            };
+            // Clamp to world bounds
+            if (thief.x < 50) thief.x = 50;
+            if (thief.x > WORLD_W - 50) thief.x = WORLD_W - 50;
+          }
+        }
+
+        if (thief && !thiefDefeated) {
+          // Thief physics
+          thief.vy += GRAV;
+          thief.x += thief.vx;
+          thief.y += thief.vy;
+
+          // Ground collision
+          thief.grounded = false;
+          if (thief.y + thief.h >= GROUND) {
+            thief.y = GROUND - thief.h;
+            thief.vy = 0;
+            thief.grounded = true;
+          }
+
+          // Platform collision for thief
+          for (const pl of platforms) {
+            if (
+              thief.vy >= 0 &&
+              thief.x + thief.w > pl.x &&
+              thief.x < pl.x + pl.w &&
+              thief.y + thief.h >= pl.y &&
+              thief.y + thief.h <= pl.y + pl.h + 12
+            ) {
+              thief.y = pl.y - thief.h;
+              thief.vy = 0;
+              thief.grounded = true;
+            }
+          }
+
+          // Thief AI - Among Us style behavior
+          const distToPlayer = Math.abs(P.x - thief.x);
+          const canSeePlayer =
+            distToPlayer < 600 && Math.abs(P.y - thief.y) < 100;
+
+          if (canSeePlayer) {
+            thief.lastSeen = 60; // Remember player for 1 second
+            // Chase player if they have packages
+            if (P.packages > 0) {
+              thief.suspicious = true;
+              thief.suspiciousTime = 120;
+              if (P.x > thief.x) {
+                thief.vx = thief.speed;
+                thief.right = true;
+              } else {
+                thief.vx = -thief.speed;
+                thief.right = false;
+              }
+              // Jump to reach player
+              if (thief.grounded && Math.random() > 0.95) {
+                thief.vy = JUMP * 0.8;
+              }
+            } else {
+              // Wander if player has no packages
+              thief.vx = (Math.random() - 0.5) * thief.speed;
+            }
+          } else if (thief.lastSeen > 0) {
+            // Continue chasing briefly after losing sight
+            thief.lastSeen--;
+            if (P.x > thief.x) {
+              thief.vx = thief.speed * 0.7;
+            } else {
+              thief.vx = -thief.speed * 0.7;
+            }
+          } else {
+            // Wander randomly
+            thief.suspicious = false;
+            if (Math.random() > 0.98) {
+              thief.vx = (Math.random() - 0.5) * thief.speed;
+            }
+            thief.vx *= 0.95; // Friction
+          }
+
+          // Steal packages from player
+          if (thief.stealCooldown > 0) thief.stealCooldown--;
+
+          if (
+            distToPlayer < 40 &&
+            P.packages > 0 &&
+            thief.stealCooldown === 0
+          ) {
+            P.packages--;
+            thief.stealCooldown = 180; // 3 second cooldown
+            createParticles(
+              thief.x + thief.w / 2,
+              thief.y + thief.h / 2,
+              "#ff4444",
+              15
+            );
+            screenShake = 2; // Minimal shake intensity
+            score = Math.max(0, score - 50);
+            combo = 0; // Reset combo
+            comboTime = 0;
+            assignDeliveries(); // Re-assign if package stolen
+          }
+
+          // Suspicious behavior timer
+          if (thief.suspiciousTime > 0) {
+            thief.suspiciousTime--;
+          } else {
+            thief.suspicious = false;
+          }
+
+          // Bounds
+          if (thief.x < 10) {
+            thief.x = 10;
+            thief.vx = 0;
+          }
+          if (thief.x + thief.w > WORLD_W - 10) {
+            thief.x = WORLD_W - thief.w - 10;
+            thief.vx = 0;
+          }
+        }
+
+        // Update particles
+        updateParticles();
+
+        // Update player trail
+        updateTrail();
+
+        // Update score popups
+        for (let i = scorePopups.length - 1; i >= 0; i--) {
+          scorePopups[i].y += scorePopups[i].vy;
+          scorePopups[i].vy *= 0.95;
+          scorePopups[i].life--;
+          if (scorePopups[i].life <= 0) scorePopups.splice(i, 1);
+        }
+
+        // Update stats
+        if (gameStartTime > 0) {
+          const gameTime = Math.floor((Date.now() - gameStartTime) / 1000);
+          document.getElementById("game-time").textContent = gameTime;
+          document.getElementById("best-combo").textContent = bestCombo;
+          const accuracy =
+            totalDeliveries > 0
+              ? Math.round((successfulDeliveries / totalDeliveries) * 100)
+              : 100;
+          document.getElementById("accuracy").textContent = accuracy;
+        }
+
+        // Screen shake decay
+        if (screenShake > 0) screenShake--;
+
+        // Ice
+        for (const ice of iceBlocks) {
+          ice.y += ice.speed;
+          ice.rot += 0.05;
+
+          if (ice.y > H + 50) {
+            ice.y = -50 - Math.random() * 300;
+            ice.x = Math.random() * WORLD_W;
+          }
+
+          // Collision
+          if (
+            P.x < ice.x + ice.size &&
+            P.x + P.w > ice.x &&
+            P.y < ice.y + ice.size &&
+            P.y + P.h > ice.y
+          ) {
+            P.stamina -= 20;
+            score = Math.max(0, score - 25);
+            P.vx = P.x > ice.x ? 5 : -5;
+            P.vy = -8;
+            combo = 0; // Reset combo on hit
+            comboTime = 0;
+            createParticles(
+              ice.x + ice.size / 2,
+              ice.y + ice.size / 2,
+              "#87ceeb",
+              15
+            );
+            screenShake = 2; // Minimal shake intensity
+            ice.y = -100 - Math.random() * 200;
+            ice.x = Math.random() * WORLD_W;
+
+            if (P.stamina <= 0) {
+              P.stamina = 0;
+              endGame();
+            }
+          }
+        }
+
+        // Snow
+        for (const s of snow) {
+          s.y += s.s;
+          s.x += Math.sin(Date.now() / 1000 + s.x) * 0.3;
+          if (s.y > H) {
+            s.y = -5;
+            s.x = Math.random() * WORLD_W;
+          }
+        }
+
+        // Camera - ensure full screen is always visible
+        const target = P.x - W / 2 + P.w / 2;
+
+        // Smoothly move camera towards target
+        camX += (target - camX) * 0.1;
+
+        // Strict bounds checking
+        const minCamX = 0;
+        const maxCamX = Math.max(0, WORLD_W - W);
+
+        camX = Math.max(minCamX, Math.min(camX, maxCamX));
+
+        updateHUD();
+      }
+
+      function draw() {
+        // Sky
+        const sky = ctx.createLinearGradient(0, 0, 0, H);
+        sky.addColorStop(0, "#0a0a20");
+        sky.addColorStop(1, "#1a2a4a");
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, W, H);
+
+        // Stars (twinkling)
+        const time = Date.now() / 1000;
+        for (let i = 0; i < 40; i++) {
+          const twinkle = 0.3 + Math.sin(time * 2 + i) * 0.2;
+          ctx.fillStyle = `rgba(255,255,255,${twinkle})`;
+          ctx.beginPath();
+          ctx.arc(
+            (i * 61) % W,
+            (i * 37) % (H * 0.5),
+            1 + Math.sin(time + i) * 0.5,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        }
+
+        // Moon (with glow)
+        const moonGrad = ctx.createRadialGradient(
+          W - 60,
+          50,
+          0,
+          W - 60,
+          50,
+          40
+        );
+        moonGrad.addColorStop(0, "#fff");
+        moonGrad.addColorStop(0.5, "#eee");
+        moonGrad.addColorStop(1, "rgba(238,238,238,0)");
+        ctx.fillStyle = moonGrad;
+        ctx.beginPath();
+        ctx.arc(W - 60, 50, 40, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#eee";
+        ctx.beginPath();
+        ctx.arc(W - 60, 50, 30, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.save();
+        // Apply camera transformation
+        ctx.translate(-camX, 0);
+
+        // Ground FIRST
+        ctx.fillStyle = "#f5f5f5";
+        ctx.fillRect(0, GROUND, WORLD_W, 50);
+        ctx.fillStyle = "#e0e0e0";
+        ctx.fillRect(0, GROUND + 8, WORLD_W, 42);
+
+        // Background buildings
+        ctx.fillStyle = "#2c3e50";
+        for (let x = 200; x < WORLD_W; x += 200) {
+          const bh = 80 + Math.sin(x) * 40;
+          ctx.fillRect(x, GROUND - bh, 100, bh);
+          ctx.fillStyle = "#34495e";
+          ctx.fillRect(x, GROUND - bh, 100, 10);
+          ctx.fillStyle = "#2c3e50";
+        }
+
+        // Warehouse
+        if (warehouse) {
+          ctx.fillStyle = "#8b7355";
+          ctx.fillRect(warehouse.x, warehouse.y, warehouse.w, warehouse.h);
+          ctx.fillStyle = "#ffd93d";
+          ctx.fillRect(warehouse.x + 40, warehouse.y + 30, 40, 60);
+          ctx.fillStyle = "#fff";
+          ctx.font = "bold 12px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(
+            "WAREHOUSE",
+            warehouse.x + warehouse.w / 2,
+            warehouse.y - 5
+          );
+          ctx.fillText(
+            "[" + warehouse.stock + "]",
+            warehouse.x + warehouse.w / 2,
+            warehouse.y + 60
+          );
+        }
+
+        // Houses
+        for (const h of houses) {
+          // Body
+          ctx.fillStyle = "#ddd";
+          ctx.fillRect(h.x, h.y, h.w, h.h);
+
+          // Roof
+          ctx.fillStyle = h.color;
+          ctx.beginPath();
+          ctx.moveTo(h.x - 8, h.y);
+          ctx.lineTo(h.x + h.w / 2, h.y - 30);
+          ctx.lineTo(h.x + h.w + 8, h.y);
+          ctx.closePath();
+          ctx.fill();
+
+          // Snow on roof
+          ctx.fillStyle = "#fff";
+          ctx.beginPath();
+          ctx.moveTo(h.x - 8, h.y + 2);
+          ctx.lineTo(h.x + h.w / 2, h.y - 25);
+          ctx.lineTo(h.x + h.w + 8, h.y + 2);
+          ctx.closePath();
+          ctx.fill();
+
+          // Door
+          ctx.fillStyle = "#654321";
+          ctx.fillRect(h.x + h.w / 2 - 10, h.y + h.h - 35, 20, 35);
+
+          // Windows
+          ctx.fillStyle = "#ffeaa7";
+          ctx.fillRect(h.x + 10, h.y + 15, 18, 18);
+          ctx.fillRect(h.x + h.w - 28, h.y + 15, 18, 18);
+
+          // Delivery marker
+          if (h.needs) {
+            const pulse = 0.7 + Math.sin(Date.now() / 150) * 0.3;
+            ctx.fillStyle = "rgba(255,100,100," + pulse + ")";
+            ctx.beginPath();
+            ctx.moveTo(h.x + h.w / 2, h.y - 45);
+            ctx.lineTo(h.x + h.w / 2 - 12, h.y - 65);
+            ctx.lineTo(h.x + h.w / 2 + 12, h.y - 65);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = "#fff";
+            ctx.font = "14px sans-serif";
+            ctx.fillText("📦", h.x + h.w / 2, h.y - 50);
+          }
+
+          // Mission target indicator (e.g., a blue ring)
+          if (h.missionTarget && !h.done) {
+            const ringPulse = 0.5 + Math.sin(Date.now() / 150) * 0.5;
+            ctx.strokeStyle = `rgba(79, 195, 247, ${ringPulse})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(h.x + h.w / 2, h.y + h.h / 2, h.w / 2 + 5, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+
+          // Done checkmark
+          if (h.done) {
+            ctx.fillStyle = "#4caf50";
+            ctx.beginPath();
+            ctx.arc(h.x + h.w / 2, h.y - 40, 12, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#fff";
+            ctx.font = "14px sans-serif";
+            ctx.fillText("✓", h.x + h.w / 2, h.y - 36);
+          }
+        }
+
+        // Platforms
+        for (const pl of platforms) {
+          const g = ctx.createLinearGradient(pl.x, pl.y, pl.x, pl.y + pl.h);
+          g.addColorStop(0, "#b3e5fc");
+          g.addColorStop(1, "#4fc3f7");
+          ctx.fillStyle = g;
+          ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(pl.x, pl.y, pl.w, 3);
+        }
+
+        // Snow particles
+        ctx.fillStyle = "rgba(255,255,255,0.6)";
+        for (const s of snow) {
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Ice
+        for (const ice of iceBlocks) {
+          ctx.save();
+          ctx.translate(ice.x + ice.size / 2, ice.y + ice.size / 2);
+          ctx.rotate(ice.rot);
+          ctx.fillStyle = "rgba(173,216,230,0.85)";
+          ctx.beginPath();
+          ctx.moveTo(0, -ice.size / 2);
+          ctx.lineTo(ice.size / 2, 0);
+          ctx.lineTo(0, ice.size / 2);
+          ctx.lineTo(-ice.size / 2, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = "#fff";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Power-ups
+        for (const pu of powerUps) {
+          if (!pu.collected) {
+            pu.rot += 0.05;
+            ctx.save();
+            ctx.translate(pu.x + 10, pu.y + 10);
+            ctx.rotate(pu.rot);
+            const pulse = 0.8 + Math.sin(Date.now() / 200) * 0.2;
+            ctx.globalAlpha = pulse;
+            ctx.fillStyle = pu.type === "stamina" ? "#4fc3f7" : "#ffd93d";
+            ctx.beginPath();
+            ctx.arc(0, 0, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 12px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(pu.type === "stamina" ? "⚡" : "⭐", 0, 0);
+            ctx.restore();
+          }
+        }
+
+        // Thief (draw before player so player appears on top)
+        if (thief && !thiefDefeated) {
+          const tx = thief.x,
+            ty = thief.y;
+
+          // Shadow
+          ctx.fillStyle = "rgba(255,0,0,0.3)";
+          ctx.beginPath();
+          ctx.ellipse(
+            tx + thief.w / 2,
+            GROUND,
+            thief.w * 0.6,
+            6,
+            0,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+
+          // Red glow effect (Among Us style)
+          if (thief.suspicious) {
+            const glow = ctx.createRadialGradient(
+              tx + thief.w / 2,
+              ty + thief.h / 2,
+              0,
+              tx + thief.w / 2,
+              ty + thief.h / 2,
+              50
+            );
+            glow.addColorStop(0, "rgba(255,68,68,0.4)");
+            glow.addColorStop(1, "rgba(255,68,68,0)");
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(tx + thief.w / 2, ty + thief.h / 2, 50, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Body (red coat - suspicious!)
+          ctx.fillStyle = "#d32f2f";
+          ctx.fillRect(tx + 2, ty + 10, thief.w - 4, thief.h - 18);
+
+          // Legs
+          const walkOffset =
+            Math.abs(thief.vx) > 0.3 ? Math.sin(Date.now() / 100) * 3 : 0;
+          ctx.fillStyle = "#b71c1c";
+          ctx.fillRect(tx + 4 + walkOffset, ty + thief.h - 12, 6, 12);
+          ctx.fillRect(
+            tx + thief.w - 10 - walkOffset,
+            ty + thief.h - 12,
+            6,
+            12
+          );
+
+          // Boots
+          ctx.fillStyle = "#212121";
+          ctx.fillRect(tx + 2 + walkOffset, ty + thief.h - 4, 9, 4);
+          ctx.fillRect(tx + thief.w - 11 - walkOffset, ty + thief.h - 4, 9, 4);
+
+          // Mask (thief mask)
+          ctx.fillStyle = "#424242";
+          ctx.fillRect(tx + 4, ty + 8, thief.w - 8, 12);
+
+          // Eyes (glowing red)
+          ctx.fillStyle = "#ff4444";
+          const eyeDir = thief.right ? 2 : -2;
+          ctx.beginPath();
+          ctx.arc(tx + thief.w / 2 + eyeDir - 3, ty + 12, 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(tx + thief.w / 2 + eyeDir + 3, ty + 12, 2, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Health bar (always show when damaged)
+          if (thief.health < thief.maxHealth) {
+            ctx.fillStyle = "#333";
+            ctx.fillRect(tx, ty - 8, thief.w, 4);
+            ctx.fillStyle = "#4caf50";
+            ctx.fillRect(
+              tx,
+              ty - 8,
+              thief.w * (thief.health / thief.maxHealth),
+              4
+            );
+            // Health text
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 10px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(
+              `${thief.health}/${thief.maxHealth}`,
+              tx + thief.w / 2,
+              ty - 10
+            );
+          }
+
+          // Suspicious indicator (exclamation mark)
+          if (thief.suspicious) {
+            ctx.fillStyle = "#ffd93d";
+            ctx.font = "bold 16px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(
+              "!",
+              tx + thief.w / 2,
+              ty - (thief.health < thief.maxHealth ? 25 : 15)
+            );
+          }
+
+          // Visual indicator when can be hit (flashing when hit cooldown is ready)
+          if (thiefHitCooldown === 0) {
+            const flash = Math.sin(Date.now() / 200) > 0;
+            if (flash) {
+              ctx.strokeStyle = "rgba(255,255,0,0.5)";
+              ctx.lineWidth = 2;
+              ctx.strokeRect(tx - 2, ty - 2, thief.w + 4, thief.h + 4);
+            }
+          }
+        }
+
+        // Draw damage numbers (after camera transform is restored)
+        for (const dn of damageNumbers) {
+          ctx.save();
+          ctx.globalAlpha = dn.life / 60;
+          ctx.fillStyle = "#ff4444";
+          ctx.font = "bold 20px sans-serif";
+          ctx.textAlign = "center";
+          ctx.strokeStyle = "#000";
+          ctx.lineWidth = 3;
+          ctx.strokeText(dn.value, dn.x - camX, dn.y);
+          ctx.fillText(dn.value, dn.x - camX, dn.y);
+          ctx.restore();
+        }
+
+        // Particles
+        drawParticles();
+
+        // Player trail effect
+        for (let i = 0; i < playerTrail.length; i++) {
+          const t = playerTrail[i];
+          ctx.save();
+          ctx.globalAlpha = t.alpha * 0.3;
+          ctx.fillStyle = "#4fc3f7";
+          ctx.beginPath();
+          ctx.arc(t.x, t.y, 3 + (1 - t.alpha) * 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Player - simple visible character
+        const px = P.x,
+          py = P.y;
+
+        // Shadow
+        ctx.fillStyle = "rgba(0,0,0,0.2)";
+        ctx.beginPath();
+        ctx.ellipse(px + P.w / 2, GROUND, P.w * 0.6, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Body (blue coat)
+        ctx.fillStyle = "#1976d2";
+        ctx.fillRect(px + 3, py + 12, P.w - 6, P.h - 20);
+
+        // Legs
+        const walkOffset =
+          Math.abs(P.vx) > 0.3 ? Math.sin(Date.now() / 80) * 4 : 0;
+        ctx.fillStyle = "#1565c0";
+        ctx.fillRect(px + 6 + walkOffset, py + P.h - 14, 8, 14);
+        ctx.fillRect(px + P.w - 14 - walkOffset, py + P.h - 14, 8, 14);
+
+        // Boots
+        ctx.fillStyle = "#5d4037";
+        ctx.fillRect(px + 4 + walkOffset, py + P.h - 6, 11, 6);
+        ctx.fillRect(px + P.w - 15 - walkOffset, py + P.h - 6, 11, 6);
+
+        // Scarf
+        ctx.fillStyle = "#e53935";
+        ctx.fillRect(px + 5, py + 12, P.w - 10, 5);
+
+        // Head
+        ctx.fillStyle = "#ffcc80";
+        ctx.beginPath();
+        ctx.arc(px + P.w / 2, py + 8, 9, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Hat
+        ctx.fillStyle = "#c62828";
+        ctx.beginPath();
+        ctx.arc(px + P.w / 2, py + 4, 10, Math.PI, 0);
+        ctx.fill();
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(px + P.w / 2 - 11, py + 2, 22, 4);
+        ctx.beginPath();
+        ctx.arc(px + P.w / 2, py - 4, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Eyes
+        ctx.fillStyle = "#333";
+        const eyeDir = P.right ? 2 : -2;
+        ctx.beginPath();
+        ctx.arc(px + P.w / 2 + eyeDir - 3, py + 8, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(px + P.w / 2 + eyeDir + 3, py + 8, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Backpack with packages
+        ctx.fillStyle = "#5d4037";
+        const bpX = P.right ? px - 6 : px + P.w - 6;
+        ctx.fillRect(bpX, py + 14, 10, 18);
+        if (P.packages > 0) {
+          ctx.fillStyle = "#ffd93d";
+          for (let i = 0; i < P.packages; i++) {
+            ctx.fillRect(bpX + 1, py + 15 + i * 5, 8, 4);
+          }
+        }
+
+        ctx.restore();
+
+        // Draw score popups
+        for (const sp of scorePopups) {
+          ctx.save();
+          const alpha = sp.life / 60;
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = sp.color;
+          ctx.font = "bold 18px sans-serif";
+          ctx.textAlign = "center";
+          ctx.strokeStyle = "#000";
+          ctx.lineWidth = 2;
+          ctx.strokeText(sp.text, sp.x - camX, sp.y);
+          ctx.fillText(sp.text, sp.x - camX, sp.y);
+          ctx.restore();
+        }
+
+        // Minimap
+        drawMinimap();
+      }
+
+      function drawMinimap() {
+        const mw = mini.width,
+          mh = mini.height;
+        const sc = mw / WORLD_W;
+
+        mctx.fillStyle = "rgba(10,20,40,0.9)";
+        mctx.fillRect(0, 0, mw, mh);
+
+        // Ground
+        mctx.fillStyle = "#555";
+        mctx.fillRect(0, mh - 6, mw, 6);
+
+        // Warehouse
+        mctx.fillStyle = "#ffd93d";
+        mctx.fillRect(warehouse.x * sc, mh - 15, warehouse.w * sc, 9);
+
+        // Houses
+        for (const h of houses) {
+          mctx.fillStyle = h.needs ? "#ff6b6b" : h.done ? "#4caf50" : "#888";
+          mctx.fillRect(h.x * sc, mh - 14, h.w * sc, 8);
+        }
+
+        // Power-ups
+        for (const pu of powerUps) {
+          if (!pu.collected) {
+            mctx.fillStyle = pu.type === "stamina" ? "#4fc3f7" : "#ffd93d";
+            mctx.beginPath();
+            mctx.arc(pu.x * sc, mh - 18, 2, 0, Math.PI * 2);
+            mctx.fill();
+          }
+        }
+
+        // Player
+        mctx.fillStyle = "#4fc3f7";
+        mctx.beginPath();
+        mctx.arc(P.x * sc, mh - 18, 3, 0, Math.PI * 2);
+        mctx.fill();
+
+        // Thief
+        if (thief && !thiefDefeated) {
+          mctx.fillStyle = "#ff4444";
+          mctx.beginPath();
+          mctx.arc(thief.x * sc, mh - 18, 3, 0, Math.PI * 2);
+          mctx.fill();
+          // Pulsing effect
+          if (thief.suspicious) {
+            mctx.strokeStyle = "rgba(255,68,68,0.6)";
+            mctx.lineWidth = 2;
+            mctx.beginPath();
+            mctx.arc(thief.x * sc, mh - 18, 5, 0, Math.PI * 2);
+            mctx.stroke();
+          }
+        }
+
+        // View area
+        mctx.strokeStyle = "rgba(255,255,255,0.4)";
+        mctx.lineWidth = 1;
+        mctx.strokeRect(camX * sc, 2, W * sc, mh - 8);
+      }
+
+      function showCombo(count) {
+        const comboEl = document.getElementById("combo");
+        if (typeof count === "string") {
+          comboEl.textContent = count;
+        } else {
+          comboEl.textContent = `${count}x COMBO! +${count * 20}pts`;
+        }
+        comboEl.classList.add("show");
+        setTimeout(() => comboEl.classList.remove("show"), 600);
+      }
+
+      function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      loop();
+    </script>
+  </body>
+</html>
