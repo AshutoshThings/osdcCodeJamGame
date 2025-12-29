@@ -514,7 +514,7 @@
             animation: none;
           "
         >
-          ⚠️ HP LOW!
+          ⚠️ STAMINA LOW!
         </div>
         <div class="hud-item">
           Stamina
@@ -614,10 +614,9 @@
       </div>
 
       <div id="pause">
-        <h2>⏸️ Paused</h2>
+        <h2>Paused</h2>
         <p>
-          Press <span class="key">P</span> or <span class="key">ESC</span> to
-          resume
+          Press <span class="key">P</span> to resume
         </p>
       </div>
 
@@ -1148,7 +1147,7 @@
           thiefWarning.style.display = "none";
         }
 
-        // HP Low warning
+        // Stamina Low warning
         const hpLowWarning = document.getElementById("hp-low-warning");
         if (P.stamina < 30) {
           const pulse = 0.5 + Math.sin(Date.now() / 150) * 0.5;
@@ -1261,7 +1260,7 @@
 
       function nextLevel() {
         level++;
-        score += 500 + combo * 50;
+        score += 50 + combo * 5;
         createParticles(P.x + P.w / 2, P.y + P.h / 2, "#4fc3f7", 30);
         screenShake = 4; // Minimal shake for level up
         // Show level up animation - just the level number
@@ -1420,12 +1419,16 @@
           ) {
             // Damage the thief
             thief.health--;
+            thief.hitFlash = 20; // Flash frames instead of squish
             thiefHitCooldown = 45; // Longer cooldown - must land and jump again
-            createParticles(thief.x + thief.w / 2, thief.y, "#4a7c59", 25); // Green particles for Grinch
-            screenShake = 2; // Minimal shake intensity
+            
+            // Big star burst effect
+            createParticles(thief.x + thief.w / 2, thief.y, "#ffff00", 15); // Yellow stars
+            createParticles(thief.x + thief.w / 2, thief.y, "#4a7c59", 20); // Green particles
+            screenShake = 4; // Satisfying screen shake
             P.vy = -14; // Strong bounce off to ensure player leaves
-            score += 100;
-            showScorePopup(thief.x + thief.w / 2, thief.y, "+100", "#ffd93d");
+            score += 10;
+            showScorePopup(thief.x + thief.w / 2, thief.y, "+10", "#ffd93d");
 
             // Add damage number
             damageNumbers.push({
@@ -1449,11 +1452,11 @@
                 40
               );
               screenShake = 3; // Minimal shake intensity
-              score += 500;
+              score += 50;
               showScorePopup(
                 P.x + P.w / 2,
                 P.y,
-                "+500 GRINCH DEFEATED!",
+                "+50 GRINCH DEFEATED!",
                 "#4caf50"
               );
               showAchievement("🎄", "Grinch Defeated!");
@@ -1510,7 +1513,7 @@
           if (P.packages < 3 && warehouse.stock > 0) {
             P.packages++;
             warehouse.stock--;
-            score += 20;
+            score += 2;
             showScorePopup(
               warehouse.x + warehouse.w / 2,
               warehouse.y,
@@ -1544,8 +1547,8 @@
             // Combo system
             combo++;
             comboTime = 300; // 5 seconds at 60fps
-            const comboBonus = Math.min(combo * 20, 200);
-            score += 150 + comboBonus;
+            const comboBonus = Math.min(combo * 2, 20);
+            score += 15 + comboBonus;
             totalDeliveries++;
             successfulDeliveries++;
 
@@ -1639,8 +1642,8 @@
               showScorePopup(pu.x + 10, pu.y + 10, "🚀 TURBO!", "#ff4444");
               showCombo("TURBO MODE!");
             } else {
-              score += 100;
-              showScorePopup(pu.x + 10, pu.y + 10, "⭐ +100", "#ffd93d");
+              score += 10;
+              showScorePopup(pu.x + 10, pu.y + 10, "⭐ +10", "#ffd93d");
             }
             // Check mission completion
             if (currentMission && currentMission.type === "powerups") {
@@ -1727,6 +1730,7 @@
               suspicious: false,
               suspiciousTime: 0,
               lastSeen: 0,
+              hitFlash: 0, // Flash when hit
             };
             // Clamp to world bounds
             if (thief.x < 50) thief.x = 50;
@@ -1739,6 +1743,11 @@
           thief.vy += GRAV;
           thief.x += thief.vx;
           thief.y += thief.vy;
+          
+          // Decay hit flash
+          if (thief.hitFlash > 0) {
+            thief.hitFlash--;
+          }
 
           // Ground collision
           thief.grounded = false;
@@ -1786,8 +1795,16 @@
                 thief.vy = JUMP * 0.8;
               }
             } else {
-              // Wander if player has no packages
-              thief.vx = (Math.random() - 0.5) * thief.speed;
+              // No packages? Grinch is bored - wander away slowly
+              thief.suspicious = false;
+              // Move away from player
+              if (P.x > thief.x) {
+                thief.vx = -thief.speed * 0.5; // Walk away
+                thief.right = false;
+              } else {
+                thief.vx = thief.speed * 0.5;
+                thief.right = true;
+              }
             }
           } else if (thief.lastSeen > 0) {
             // Continue chasing briefly after losing sight
@@ -1823,7 +1840,7 @@
               15
             );
             screenShake = 2; // Minimal shake intensity
-            score = Math.max(0, score - 50);
+            score = Math.max(0, score - 5);
             combo = 0; // Reset combo
             comboTime = 0;
             assignDeliveries(); // Re-assign if package stolen
@@ -2235,11 +2252,11 @@
         // Power-ups
         for (const pu of powerUps) {
           if (!pu.collected) {
-            pu.rot += 0.05;
+            pu.rot += 0.03;
             ctx.save();
-            ctx.translate(pu.x + 10, pu.y + 10);
+            ctx.translate(pu.x + 15, pu.y + 15);
             ctx.rotate(pu.rot);
-            const pulse = 0.8 + Math.sin(Date.now() / 200) * 0.2;
+            const pulse = 0.85 + Math.sin(Date.now() / 200) * 0.15;
             ctx.globalAlpha = pulse;
             // Different colors for each powerup type
             if (pu.type === "stamina") {
@@ -2250,18 +2267,24 @@
               // Turbo - fiery orange/red
               ctx.fillStyle = "#ff6600";
             }
+            // Larger circle
             ctx.beginPath();
-            ctx.arc(0, 0, 8, 0, Math.PI * 2);
+            ctx.arc(0, 0, 14, 0, Math.PI * 2);
             ctx.fill();
+            // White border
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            // Larger icons
             ctx.fillStyle = "#fff";
-            ctx.font = "bold 12px sans-serif";
+            ctx.font = "bold 18px sans-serif";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             // Different icons for each type
             let icon = "⚡";
-            if (pu.type === "speed") icon = "⭐";
+            if (pu.type === "speed") icon = "★";
             else if (pu.type === "turbo") icon = "🔥";
-            ctx.fillText(icon, 0, 0);
+            ctx.fillText(icon, 0, 1);
             ctx.restore();
           }
         }
@@ -2305,8 +2328,15 @@
 
           // === THE GRINCH ===
           
-          // Furry green body
-          ctx.fillStyle = "#4a7c59";
+          // Hit flash effect when stomped
+          const isFlashing = thief.hitFlash > 0;
+          if (isFlashing && thief.hitFlash % 4 < 2) {
+            // Blink white every few frames
+            ctx.globalAlpha = 0.7;
+          }
+          
+          // Furry green body (flash white when hit)
+          ctx.fillStyle = isFlashing ? "#ffffff" : "#4a7c59";
           ctx.fillRect(tx + 2, ty + 14, thief.w - 4, thief.h - 22);
           
           // Fur texture on body
@@ -2339,69 +2369,122 @@
           ctx.arc(tx + thief.w / 2, ty + 8, 12, 0, Math.PI * 2);
           ctx.fill();
           
-          // Fur tufts on head
+          // Fur tufts on head - more wild and spiky
           ctx.fillStyle = "#3d6b4a";
           ctx.beginPath();
-          ctx.arc(tx + thief.w / 2 - 8, ty + 2, 4, 0, Math.PI * 2);
+          ctx.arc(tx + thief.w / 2 - 10, ty, 5, 0, Math.PI * 2);
           ctx.fill();
           ctx.beginPath();
-          ctx.arc(tx + thief.w / 2 + 8, ty + 2, 4, 0, Math.PI * 2);
+          ctx.arc(tx + thief.w / 2 + 10, ty, 5, 0, Math.PI * 2);
           ctx.fill();
           ctx.beginPath();
-          ctx.arc(tx + thief.w / 2, ty - 2, 3, 0, Math.PI * 2);
+          ctx.arc(tx + thief.w / 2, ty - 4, 4, 0, Math.PI * 2);
+          ctx.fill();
+          // Extra spiky tufts
+          ctx.beginPath();
+          ctx.moveTo(tx + thief.w / 2 - 12, ty - 2);
+          ctx.lineTo(tx + thief.w / 2 - 8, ty + 4);
+          ctx.lineTo(tx + thief.w / 2 - 14, ty + 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(tx + thief.w / 2 + 12, ty - 2);
+          ctx.lineTo(tx + thief.w / 2 + 8, ty + 4);
+          ctx.lineTo(tx + thief.w / 2 + 14, ty + 2);
           ctx.fill();
 
-          // Evil eyebrows (arched)
-          ctx.strokeStyle = "#3d6b4a";
-          ctx.lineWidth = 3;
+          // Evil slanted eyebrows (tiger-like, very angry)
+          ctx.strokeStyle = "#2d4a35";
+          ctx.lineWidth = 4;
+          ctx.lineCap = "round";
+          // Left eyebrow - slanted down toward center
           ctx.beginPath();
-          ctx.moveTo(tx + thief.w / 2 - 10, ty + 4);
-          ctx.quadraticCurveTo(tx + thief.w / 2 - 5, ty + 1, tx + thief.w / 2 - 2, ty + 5);
+          ctx.moveTo(tx + thief.w / 2 - 12, ty + 1);
+          ctx.lineTo(tx + thief.w / 2 - 3, ty + 6);
           ctx.stroke();
+          // Right eyebrow - slanted down toward center
           ctx.beginPath();
-          ctx.moveTo(tx + thief.w / 2 + 10, ty + 4);
-          ctx.quadraticCurveTo(tx + thief.w / 2 + 5, ty + 1, tx + thief.w / 2 + 2, ty + 5);
+          ctx.moveTo(tx + thief.w / 2 + 12, ty + 1);
+          ctx.lineTo(tx + thief.w / 2 + 3, ty + 6);
           ctx.stroke();
 
-          // Yellow eyes (sinister)
-          ctx.fillStyle = "#ffeb3b";
+          // Yellow eyes (sinister, narrow slits like a tiger)
           const eyeDir = thief.right ? 2 : -2;
+          // Eye whites (narrow ovals)
+          ctx.fillStyle = "#ffeb3b";
+          ctx.save();
+          ctx.translate(tx + thief.w / 2 + eyeDir - 6, ty + 9);
+          ctx.scale(1, 0.6);
           ctx.beginPath();
-          ctx.arc(tx + thief.w / 2 + eyeDir - 5, ty + 8, 4, 0, Math.PI * 2);
+          ctx.arc(0, 0, 5, 0, Math.PI * 2);
           ctx.fill();
+          ctx.restore();
+          ctx.save();
+          ctx.translate(tx + thief.w / 2 + eyeDir + 6, ty + 9);
+          ctx.scale(1, 0.6);
           ctx.beginPath();
-          ctx.arc(tx + thief.w / 2 + eyeDir + 5, ty + 8, 4, 0, Math.PI * 2);
+          ctx.arc(0, 0, 5, 0, Math.PI * 2);
           ctx.fill();
+          ctx.restore();
           
-          // Red pupils
-          ctx.fillStyle = "#c62828";
+          // Black slit pupils (cat/tiger-like)
+          ctx.fillStyle = "#111";
+          ctx.fillRect(tx + thief.w / 2 + eyeDir - 7, ty + 6, 2, 6);
+          ctx.fillRect(tx + thief.w / 2 + eyeDir + 5, ty + 6, 2, 6);
+          
+          // Red glint in eyes
+          ctx.fillStyle = "#ff0000";
           ctx.beginPath();
-          ctx.arc(tx + thief.w / 2 + eyeDir - 5, ty + 8, 2, 0, Math.PI * 2);
+          ctx.arc(tx + thief.w / 2 + eyeDir - 7, ty + 7, 1, 0, Math.PI * 2);
           ctx.fill();
           ctx.beginPath();
-          ctx.arc(tx + thief.w / 2 + eyeDir + 5, ty + 8, 2, 0, Math.PI * 2);
+          ctx.arc(tx + thief.w / 2 + eyeDir + 5, ty + 7, 1, 0, Math.PI * 2);
           ctx.fill();
 
-          // Angry frown (not a smile!)
-          ctx.strokeStyle = "#333";
+          // Wrinkle lines under eyes (mean look)
+          ctx.strokeStyle = "#3d6b4a";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(tx + thief.w / 2 - 10, ty + 12);
+          ctx.lineTo(tx + thief.w / 2 - 6, ty + 11);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(tx + thief.w / 2 + 10, ty + 12);
+          ctx.lineTo(tx + thief.w / 2 + 6, ty + 11);
+          ctx.stroke();
+
+          // Mean grin (wide, devious smile)
+          ctx.strokeStyle = "#1a1a1a";
           ctx.lineWidth = 2;
           ctx.beginPath();
-          // Draw angry frown - arc facing upward
-          ctx.arc(tx + thief.w / 2, ty + 20, 6, 1.2 * Math.PI, 1.8 * Math.PI);
+          ctx.moveTo(tx + thief.w / 2 - 10, ty + 16);
+          ctx.quadraticCurveTo(tx + thief.w / 2, ty + 22, tx + thief.w / 2 + 10, ty + 16);
           ctx.stroke();
           
-          // Angry teeth showing
+          // Sharp teeth in the grin
           ctx.fillStyle = "#fff";
-          ctx.fillRect(tx + thief.w / 2 - 4, ty + 15, 3, 2);
-          ctx.fillRect(tx + thief.w / 2 + 1, ty + 15, 3, 2);
+          for (let i = -3; i <= 3; i++) {
+            if (i !== 0) {
+              ctx.beginPath();
+              ctx.moveTo(tx + thief.w / 2 + i * 3 - 1, ty + 17);
+              ctx.lineTo(tx + thief.w / 2 + i * 3 + 1, ty + 17);
+              ctx.lineTo(tx + thief.w / 2 + i * 3, ty + 20);
+              ctx.closePath();
+              ctx.fill();
+            }
+          }
           
-          // Wrinkled angry nose
-          ctx.fillStyle = "#3d6b4a";
+          // Pointy nose (like the Grinch)
+          ctx.fillStyle = "#4a7c59";
           ctx.beginPath();
-          ctx.moveTo(tx + thief.w / 2, ty + 10);
-          ctx.lineTo(tx + thief.w / 2 - 3, ty + 14);
-          ctx.lineTo(tx + thief.w / 2 + 3, ty + 14);
+          ctx.moveTo(tx + thief.w / 2, ty + 8);
+          ctx.lineTo(tx + thief.w / 2 - 4, ty + 15);
+          ctx.lineTo(tx + thief.w / 2 + 4, ty + 15);
           ctx.closePath();
+          ctx.fill();
+          // Nostril
+          ctx.fillStyle = "#2d4a35";
+          ctx.beginPath();
+          ctx.arc(tx + thief.w / 2, ty + 14, 2, 0, Math.PI * 2);
           ctx.fill();
           
           // Grinch fingers (long and creepy)
@@ -2428,19 +2511,23 @@
           ctx.fillRect(2, 12, 3, 8);
           ctx.restore();
           
-          // Santa hat (stolen!)
+          // Santa hat (stolen!) - tip trails behind when moving, straight when stationary
+          const grinchHatOffset = Math.abs(thief.vx) > 0.5 ? (thief.vx > 0 ? -12 : 12) : 0;
           ctx.fillStyle = "#c62828";
           ctx.beginPath();
           ctx.moveTo(tx + thief.w / 2 - 10, ty - 4);
           ctx.lineTo(tx + thief.w / 2 + 10, ty - 4);
-          ctx.lineTo(tx + thief.w / 2 + 15, ty - 22);
+          ctx.lineTo(tx + thief.w / 2 + grinchHatOffset, ty - 24); // Tip slants opposite to movement
           ctx.closePath();
           ctx.fill();
           ctx.fillStyle = "#fff";
           ctx.fillRect(tx + thief.w / 2 - 12, ty - 6, 24, 5);
           ctx.beginPath();
-          ctx.arc(tx + thief.w / 2 + 15, ty - 22, 4, 0, Math.PI * 2);
+          ctx.arc(tx + thief.w / 2 + grinchHatOffset, ty - 24, 4, 0, Math.PI * 2); // Pom-pom follows tip
           ctx.fill();
+          
+          // Reset alpha after squish effect
+          ctx.globalAlpha = 1.0;
 
           // Health bar (always show when damaged)
           if (thief.health < thief.maxHealth) {
@@ -2474,16 +2561,6 @@
               tx + thief.w / 2,
               ty - (thief.health < thief.maxHealth ? 25 : 15)
             );
-          }
-
-          // Visual indicator when can be hit (flashing when hit cooldown is ready)
-          if (thiefHitCooldown === 0) {
-            const flash = Math.sin(Date.now() / 200) > 0;
-            if (flash) {
-              ctx.strokeStyle = "rgba(255,255,0,0.5)";
-              ctx.lineWidth = 2;
-              ctx.strokeRect(tx - 2, ty - 2, thief.w + 4, thief.h + 4);
-            }
           }
         }
 
@@ -2619,18 +2696,22 @@
         ctx.fill();
         ctx.fillRect(px + 8, py + 4, 20, 8);
         
-        // Santa hat
+        // Santa hat - tip trails behind when moving, straight when stationary
+        // Since we're inside a flip transform, always use -12 when moving (trails behind visually)
+        // The flip transform will make it appear correct for both directions
+        const isMoving = Math.abs(P.vx) > 0.5;
+        const hatTipOffset = isMoving ? -12 : 0; // Always trail behind (left in local coords)
         ctx.fillStyle = "#c62828";
         ctx.beginPath();
         ctx.moveTo(px + 8, py - 2);
         ctx.lineTo(px + 28, py - 2);
-        ctx.lineTo(px + 30, py - 18);
+        ctx.lineTo(px + 18 + hatTipOffset, py - 20); // Tip slants opposite to movement
         ctx.closePath();
         ctx.fill();
         ctx.fillStyle = "#fff";
         ctx.fillRect(px + 6, py - 4, 24, 5);
         ctx.beginPath();
-        ctx.arc(px + 30, py - 18, 5, 0, Math.PI * 2);
+        ctx.arc(px + 18 + hatTipOffset, py - 20, 5, 0, Math.PI * 2); // Pom-pom follows tip
         ctx.fill();
         
         // Eyes
