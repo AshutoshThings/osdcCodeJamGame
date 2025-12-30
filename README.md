@@ -32,7 +32,7 @@ A winter-themed delivery game built with JavaScript and HTML5 Canvas. Play as Sa
 
 ## Demo
 
-[Demo video coming soon]
+https://drive.google.com/file/d/1KBUT_okL31S1H7q9hv_BEB5Ngrpy910N/view?usp=sharing
 
 ## Running the Game
 
