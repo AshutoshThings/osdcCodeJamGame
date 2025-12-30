@@ -432,7 +432,6 @@
       .quick-gen {
         margin: 20px 0;
         padding: 15px;
-        border-top: 1px solid #4fc3f7;
       }
       .quick-gen button {
         margin: 5px;
@@ -514,14 +513,17 @@
             animation: none;
           "
         >
-          ⚠️ STAMINA LOW!
+          ⚠️ DANGER! 1 HP LEFT!
         </div>
         <div class="hud-item">
           Stamina
           <div id="stamina-bar"><div id="stamina-fill"></div></div>
         </div>
-        <div id="turbo-indicator" class="hud-item" style="display: none; background: linear-gradient(135deg, #ff6600, #ff0000); animation: pulse 0.3s infinite;">
-          🔥 TURBO!
+        <div class="hud-item" id="health-display" style="font-size: 20px;">
+          ❤️❤️❤️
+        </div>
+        <div id="turbo-indicator" class="hud-item" style="display: none; background: linear-gradient(135deg, #4fc3f7, #2196f3); animation: pulse 0.3s infinite;">
+          🚀 TURBO!
         </div>
       </div>
 
@@ -582,16 +584,13 @@
 
       <!-- Level Generator Modal -->
       <div id="level-gen-modal" class="overlay hidden">
-        <h2>🎮 AI Level Generator</h2>
+        <h2>AI Level Generator</h2>
         <div class="level-gen-content">
-          <p>Describe the level you want to play:</p>
-          <textarea id="level-prompt" placeholder="Example: Create a challenging level with lots of moving platforms, fewer houses spread far apart, and aggressive ice falling. Make it hard but fair!"></textarea>
-          <button onclick="generateAILevel()">✨ Generate with AI</button>
+          <p style="margin-bottom: 20px;">Choose your challenge level</p>
           <div class="quick-gen">
-            <p>Or quick generate:</p>
-            <button onclick="generateQuickLevel('easy')">😊 Easy</button>
-            <button onclick="generateQuickLevel('medium')">😐 Medium</button>
-            <button onclick="generateQuickLevel('hard')">😈 Hard</button>
+            <button onclick="generateQuickLevel('easy')" style="background: linear-gradient(#4caf50, #388e3c);">Easy</button>
+            <button onclick="generateQuickLevel('medium')" style="background: linear-gradient(#ff9800, #f57c00);">Medium</button>
+            <button onclick="generateQuickLevel('hard')" style="background: linear-gradient(#f44336, #c62828);">Hard</button>
           </div>
           <button class="cancel-btn" onclick="hideLevelGeneratorModal()">Cancel</button>
         </div>
@@ -600,7 +599,7 @@
       <!-- Level Generation Loading Overlay -->
       <div id="level-gen-overlay" class="overlay hidden">
         <div class="loading-spinner"></div>
-        <h2>🤖 Generating Level...</h2>
+        <h2>Generating Level...</h2>
         <p>AI is crafting your custom level</p>
       </div>
 
@@ -672,7 +671,8 @@
         h: 45,
         vx: 0,
         vy: 0,
-        stamina: 100,
+        health: 3, // 3 hearts - lose one when hit by ice
+        stamina: 100, // For sprinting and jumping
         packages: 0,
         grounded: false,
         right: true,
@@ -683,7 +683,13 @@
         ACCEL = 0.9,
         SPRINT = 1.6,
         MAX_V = 8,
-        JUMP = -13;
+        JUMP = -11; // Lower jump - requires platforms to reach elevated houses
+      
+      // Better control feel - coyote time & jump buffer
+      let coyoteTime = 0; // Frames since leaving ground
+      let jumpBuffer = 0; // Frames since jump pressed
+      const COYOTE_FRAMES = 8; // ~133ms grace period
+      const JUMP_BUFFER_FRAMES = 10; // ~166ms buffer
 
       // Objects - initialize with defaults
       let warehouse = { x: 80, y: GROUND - 90, w: 120, h: 90, stock: 10 };
@@ -713,6 +719,10 @@
       let missionTarget = 0;
       let turboActive = false;
       let turboTimer = 0;
+      
+      // Sound effects
+      const grinchKilledSound = new Audio('sounds/grinchKilled.mp3');
+      grinchKilledSound.volume = 0.7;
 
       // Particle system
       function createParticles(x, y, color, count = 10) {
@@ -747,8 +757,8 @@
           ctx.globalAlpha = p.life;
           ctx.fillStyle = p.color;
           ctx.beginPath();
-          // Account for camera offset
-          ctx.arc(p.x - camX, p.y, p.size, 0, Math.PI * 2);
+          // Particles use world coordinates - camera transform is already applied
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
         }
@@ -761,7 +771,7 @@
         // Warehouse
         warehouse = { x: 80, y: GROUND - 90, w: 120, h: 90, stock: 10 };
 
-        // Houses - use custom or default (some elevated on platforms)
+        // Houses - use custom or procedurally generate with variety
         houses = [];
         const elevatedPlatforms = []; // Platforms for elevated houses
         if (customLevel && customLevel.houses) {
@@ -780,44 +790,67 @@
             });
           });
         } else {
-          const spots = [400, 700, 1000, 1400, 1800, 2200, 2500, 2800];
-          spots.forEach((x, i) => {
-            // Make some houses elevated (houses 2, 5, 7 are elevated)
-            const isElevated = (i === 1 || i === 4 || i === 6);
-            const platformHeight = isElevated ? 80 : 0;
-            const houseX = x + Math.random() * 100 - 50;
+          // Procedural house placement - varies each level!
+          const houseCount = 6 + Math.min(level, 4); // 6-10 houses based on level
+          const minSpacing = 280; // Minimum distance between houses
+          const startX = 350;
+          const endX = WORLD_W - 200;
+          
+          // Generate varied positions
+          let currentX = startX;
+          for (let i = 0; i < houseCount && currentX < endX; i++) {
+            // Add some randomness to spacing
+            const spacing = minSpacing + Math.random() * 150;
+            const houseX = currentX + Math.random() * 60 - 30;
+            
+            // Elevated houses: more as levels increase, but not first 2 houses
+            const elevationChance = Math.min(0.1 + level * 0.05, 0.4); // 10%-40% chance
+            const isElevated = i >= 2 && Math.random() < elevationChance;
+            const platformHeight = isElevated ? 120 + Math.random() * 40 : 0;
+            
+            // Vary house size slightly
+            const houseW = 70 + Math.random() * 20;
+            const houseH = 60 + Math.random() * 20;
             
             if (isElevated) {
-              // Create a wider platform for the elevated house
+              // Create a platform for the elevated house
               elevatedPlatforms.push({
-                x: houseX - 20,
+                x: houseX - 15,
                 y: GROUND - platformHeight,
-                w: 120, // Wide enough for house + some room
+                w: houseW + 30,
                 h: 14,
-                moving: false, // Elevated house platforms don't move
+                moving: false,
                 dir: 1,
                 speed: 0,
-                start: houseX - 20,
+                start: houseX - 15,
                 range: 0,
               });
             }
             
+            // Festive house colors with more variety
+            const colors = [
+              "#c0392b", "#27ae60", "#2980b9", "#8e44ad", "#d35400",
+              "#e74c3c", "#16a085", "#2c3e50", "#9b59b6", "#f39c12"
+            ];
+            
             houses.push({
               x: houseX,
-              y: GROUND - 70 - platformHeight,
-              w: 80,
-              h: 70,
-              color: ["#c0392b", "#27ae60", "#2980b9", "#8e44ad", "#d35400"][i % 5],
+              y: GROUND - houseH - platformHeight,
+              w: houseW,
+              h: houseH,
+              color: colors[i % colors.length],
               needs: false,
               done: false,
               name: isElevated ? "Treehouse " + (i + 1) : "House " + (i + 1),
               missionTarget: false,
               elevated: isElevated,
             });
-          });
+            
+            currentX += spacing;
+          }
         }
 
-        // Platforms - use custom or default
+        // Platforms - use custom or add helper platforms for elevated houses
         platforms = [];
         // First add elevated house platforms
         platforms.push(...elevatedPlatforms);
@@ -826,7 +859,7 @@
           customLevel.platforms.forEach((p) => {
             // Use heightAboveGround (60-120 range) to calculate Y position
             const height = Math.min(Math.max(p.heightAboveGround || 80, 60), 120);
-            const isMoving = p.moving !== undefined ? p.moving : (Math.random() > 0.5);
+            const isMoving = p.moving !== undefined ? p.moving : false;
             platforms.push({
               x: p.x,
               y: GROUND - height,
@@ -840,19 +873,55 @@
             });
           });
         } else {
-          for (let x = 300; x < WORLD_W - 100; x += 250 + Math.random() * 150) {
-            platforms.push({
-              x: x,
-              y: GROUND - 80 - Math.random() * 40,
-              w: 80 + Math.random() * 40,
-              h: 14,
-              moving: Math.random() > 0.5,
-              dir: 1,
-              speed: 1 + Math.random(),
-              start: x,
-              range: 60,
-            });
-          }
+          // Create challenging platform sequences for elevated houses
+          // Requires timing multiple moving platforms
+          let platformIndex = 0;
+          houses.forEach((house) => {
+            if (house.elevated) {
+              const baseX = house.x - 180;
+              
+              // Platform 1: Low moving platform - starting point
+              platforms.push({
+                x: baseX,
+                y: GROUND - 50,
+                w: 55,
+                h: 14,
+                moving: true,
+                dir: 1,
+                speed: 1.8,
+                start: baseX,
+                range: 35,
+              });
+              
+              // Platform 2: Mid-height moving platform - moves opposite direction
+              platforms.push({
+                x: baseX + 70,
+                y: GROUND - 90,
+                w: 50,
+                h: 14,
+                moving: true,
+                dir: -1,
+                speed: 2.0,
+                start: baseX + 70,
+                range: 30,
+              });
+              
+              // Platform 3: High moving platform - final jump to house
+              platforms.push({
+                x: baseX + 130,
+                y: GROUND - 120,
+                w: 45,
+                h: 14,
+                moving: true,
+                dir: 1,
+                speed: 1.5,
+                start: baseX + 130,
+                range: 25,
+              });
+              
+              platformIndex++;
+            }
+          });
         }
 
         // Ice - use custom settings or default
@@ -905,23 +974,20 @@
           });
         }
 
-        // Power-ups - use custom chance or default (now includes turbo)
-        const powerUpCount = customLevel ? Math.floor((customLevel.powerUpChance || 0.3) * 10) : (4 + level);
-        powerUps = [];
-        for (let i = 0; i < powerUpCount; i++) {
-          const rand = Math.random();
-          let type;
-          if (rand < 0.33) type = "stamina";
-          else if (rand < 0.66) type = "speed";
-          else type = "turbo";
-          powerUps.push({
-            x: 500 + Math.random() * (WORLD_W - 1000),
-            y: GROUND - 120 - Math.random() * 100,
-            type: type,
-            rot: 0,
-            collected: false,
-          });
-        }
+        // Power-ups - Health (restores 1 heart) and Turbo only
+        // Placed at fixed strategic locations, respawn after collection
+        powerUps = [
+          // Health powerup at far left (safe zone near warehouse)
+          { x: 250, y: GROUND - 40, type: "health", rot: 0, collected: false, respawnTimer: 0 },
+          // Health powerup in middle of map
+          { x: WORLD_W / 2, y: GROUND - 40, type: "health", rot: 0, collected: false, respawnTimer: 0 },
+          // Health powerup at far right
+          { x: WORLD_W - 300, y: GROUND - 40, type: "health", rot: 0, collected: false, respawnTimer: 0 },
+          // Turbo powerup - one in the middle area
+          { x: WORLD_W / 3, y: GROUND - 40, type: "turbo", rot: 0, collected: false, respawnTimer: 0 },
+          // Turbo powerup - one in the right area  
+          { x: WORLD_W * 2 / 3, y: GROUND - 40, type: "turbo", rot: 0, collected: false, respawnTimer: 0 },
+        ];
 
         // Thief (Grinch) - use custom settings
         const thiefEnabled = customLevel ? customLevel.thiefEnabled !== false : true;
@@ -943,6 +1009,7 @@
         P.y = GROUND - 45;
         P.vx = 0;
         P.vy = 0;
+        P.health = 3;
         P.stamina = 100;
         P.packages = 0;
 
@@ -1116,6 +1183,13 @@
         document.getElementById("need").textContent = needed;
         document.getElementById("stamina-fill").style.width = P.stamina + "%";
         
+        // Update health display
+        let hearts = "";
+        for (let i = 0; i < 3; i++) {
+          hearts += i < P.health ? "❤️" : "💔";
+        }
+        document.getElementById("health-display").textContent = hearts;
+        
         // Turbo indicator
         const turboIndicator = document.getElementById("turbo-indicator");
         turboIndicator.style.display = turboActive ? "block" : "none";
@@ -1147,9 +1221,9 @@
           thiefWarning.style.display = "none";
         }
 
-        // Stamina Low warning
+        // Low health warning
         const hpLowWarning = document.getElementById("hp-low-warning");
-        if (P.stamina < 30) {
+        if (P.health === 1) {
           const pulse = 0.5 + Math.sin(Date.now() / 150) * 0.5;
           hpLowWarning.style.opacity = pulse;
         } else {
@@ -1201,6 +1275,10 @@
         keys[e.code] = true;
         if (["Space", "ArrowUp", "ArrowDown"].includes(e.code))
           e.preventDefault();
+        // Buffer jump input for better responsiveness
+        if (e.code === "Space" || e.code === "KeyW" || e.code === "ArrowUp") {
+          jumpBuffer = JUMP_BUFFER_FRAMES;
+        }
         // P for pause
         if (e.code === "KeyP" && state === "play") {
           paused = !paused;
@@ -1336,14 +1414,33 @@
           P.right = true;
         }
 
-        if (
-          (keys["KeyW"] || keys["Space"] || keys["ArrowUp"]) &&
-          P.grounded &&
-          P.stamina >= 8
-        ) {
+        // Jump with coyote time and jump buffer
+        const canJump = (P.grounded || coyoteTime > 0) && P.stamina >= 8;
+        const wantsJump = jumpBuffer > 0;
+        if (wantsJump && canJump) {
           P.vy = JUMP;
           P.grounded = false;
           P.stamina -= 8;
+          coyoteTime = 0; // Consume coyote time
+          jumpBuffer = 0; // Consume jump buffer
+          // Jump dust effect
+          createParticles(P.x + P.w / 2, P.y + P.h, "#ffffff", 5);
+        }
+        // Countdown buffers
+        if (jumpBuffer > 0) jumpBuffer--;
+        
+        // Running footstep particles (snow puffs)
+        if (P.grounded && Math.abs(P.vx) > 2 && Math.random() < 0.2) {
+          particles.push({
+            x: P.x + P.w / 2 + (P.right ? -8 : 8),
+            y: P.y + P.h - 2,
+            vx: P.right ? -0.5 : 0.5,
+            vy: -0.3 - Math.random() * 0.5,
+            life: 0.6,
+            decay: 0.03,
+            size: 2 + Math.random() * 2,
+            color: "#fff",
+          });
         }
 
         // Physics
@@ -1367,11 +1464,37 @@
         }
 
         // Ground
+        const wasGrounded = P.grounded;
+        const landingSpeed = P.vy; // Store before resetting - used for Grinch attack detection too
         P.grounded = false;
         if (P.y + P.h >= GROUND) {
           P.y = GROUND - P.h;
           P.vy = 0;
           P.grounded = true;
+          // Landing dust effect
+          if (!wasGrounded && landingSpeed > 3) {
+            const dustCount = Math.min(Math.floor(landingSpeed * 1.5), 12);
+            for (let i = 0; i < dustCount; i++) {
+              particles.push({
+                x: P.x + P.w / 2 + (Math.random() - 0.5) * P.w,
+                y: P.y + P.h,
+                vx: (Math.random() - 0.5) * 3,
+                vy: -Math.random() * 2,
+                life: 0.8,
+                decay: 0.03,
+                size: 2 + Math.random() * 3,
+                color: "#e8f0ff",
+              });
+            }
+          }
+        }
+        // Update coyote time
+        if (P.grounded) {
+          coyoteTime = COYOTE_FRAMES;
+        } else if (wasGrounded) {
+          // Just left ground - start coyote countdown
+        } else if (coyoteTime > 0) {
+          coyoteTime--;
         }
 
         // Platforms
@@ -1381,12 +1504,16 @@
             if (pl.x < pl.start - pl.range || pl.x > pl.start + pl.range)
               pl.dir *= -1;
           }
+          // Only land on platform if falling down and feet are near platform top
+          const feetY = P.y + P.h;
+          const wasAbove = feetY - P.vy <= pl.y + 5; // Was above platform last frame
           if (
             P.vy >= 0 &&
-            P.x + P.w > pl.x &&
-            P.x < pl.x + pl.w &&
-            P.y + P.h >= pl.y &&
-            P.y + P.h <= pl.y + pl.h + 12
+            wasAbove &&
+            P.x + P.w - 5 > pl.x &&
+            P.x + 5 < pl.x + pl.w &&
+            feetY >= pl.y &&
+            feetY <= pl.y + pl.h + 8
           ) {
             P.y = pl.y - P.h;
             P.vy = 0;
@@ -1405,28 +1532,31 @@
           // Hit cooldown to prevent multiple hits in one jump
           if (thiefHitCooldown > 0) thiefHitCooldown--;
 
-          // Player jumping on thief - MUST be falling from above
-          const isAboveThief = distY > -10 && distY < 45;
-          const isFallingOnto = P.vy > 0.5; // Must be moving downward
-          const isHorizontallyAligned = distX < (P.w + thief.w) / 2 + 10;
+          // Player jumping on thief - MUST be falling from above AND have packages
+          // Use landingSpeed since P.vy may have been reset by ground collision
+          const isAboveThief = distY > -15 && distY < 50;
+          const isFallingOnto = landingSpeed > 0.5 || P.vy > 0.5; // Check both - landingSpeed for ground level, P.vy for mid-air
+          const isHorizontallyAligned = distX < (P.w + thief.w) / 2 + 15;
+          const hasPackages = P.packages > 0; // Can only attack when carrying packages
 
           if (
             horizontalOverlap &&
             isAboveThief &&
             isFallingOnto &&
             isHorizontallyAligned &&
+            hasPackages &&
             thiefHitCooldown === 0
           ) {
             // Damage the thief
             thief.health--;
             thief.hitFlash = 20; // Flash frames instead of squish
-            thiefHitCooldown = 45; // Longer cooldown - must land and jump again
+            thiefHitCooldown = 60; // Cooldown to prevent instant re-hits
             
             // Big star burst effect
             createParticles(thief.x + thief.w / 2, thief.y, "#ffff00", 15); // Yellow stars
             createParticles(thief.x + thief.w / 2, thief.y, "#4a7c59", 20); // Green particles
             screenShake = 4; // Satisfying screen shake
-            P.vy = -14; // Strong bounce off to ensure player leaves
+            P.vy = -8; // Small bounce - player must jump again to attack
             score += 10;
             showScorePopup(thief.x + thief.w / 2, thief.y, "+10", "#ffd93d");
 
@@ -1439,12 +1569,14 @@
               vy: -2,
             });
 
-            // Stun thief and push away
-            thief.vx = P.x > thief.x ? -4 : 4; // Push thief away from player
-            thief.vy = -5; // Small bounce
+            // Push thief far away so player can't just land on them again
+            thief.vx = P.x > thief.x ? -8 : 8; // Strong push away
+            thief.vy = -3; // Small bounce
 
             if (thief.health <= 0) {
               // Thief defeated!
+              grinchKilledSound.currentTime = 0;
+              grinchKilledSound.play();
               createParticles(
                 thief.x + thief.w / 2,
                 thief.y + thief.h / 2,
@@ -1499,9 +1631,20 @@
           if (dn.life <= 0) damageNumbers.splice(i, 1);
         }
 
-        // Stamina recovery
-        if (Math.abs(P.vx) < 0.5 && P.grounded && P.stamina < 100)
-          P.stamina += 0.3;
+        // Stamina recovery - faster base regen, still works while walking slowly
+        if (P.stamina < 100) {
+          // Base regen always happens (slower)
+          P.stamina += 0.15;
+          // Bonus regen when grounded and moving slowly
+          if (P.grounded && Math.abs(P.vx) < 3) {
+            P.stamina += 0.35;
+          }
+          // Extra bonus when completely still
+          if (P.grounded && Math.abs(P.vx) < 0.5) {
+            P.stamina += 0.3;
+          }
+          P.stamina = Math.min(100, P.stamina);
+        }
 
         // Warehouse pickup
         if (
@@ -1617,8 +1760,17 @@
           }
         }
 
-        // Power-ups
+        // Power-ups - handle respawn timers
         for (const pu of powerUps) {
+          // Handle respawn timer
+          if (pu.collected && pu.respawnTimer > 0) {
+            pu.respawnTimer--;
+            if (pu.respawnTimer <= 0) {
+              pu.collected = false; // Respawn!
+            }
+          }
+          
+          // Collection check
           if (
             !pu.collected &&
             P.x < pu.x + 20 &&
@@ -1627,30 +1779,28 @@
             P.y + P.h > pu.y
           ) {
             pu.collected = true;
+            pu.respawnTimer = 600; // Respawn after 10 seconds (600 frames)
             createParticles(
               pu.x + 10,
               pu.y + 10,
-              pu.type === "turbo" ? "#ff4444" : (pu.type === "stamina" ? "#4fc3f7" : "#ffd93d"),
+              pu.type === "turbo" ? "#4fc3f7" : "#ff4444",
               15
             );
-            if (pu.type === "stamina") {
-              P.stamina = Math.min(100, P.stamina + 30);
-              showScorePopup(pu.x + 10, pu.y + 10, "⚡ +30 Stamina", "#4fc3f7");
+            if (pu.type === "health") {
+              if (P.health < 3) {
+                P.health++;
+                showScorePopup(pu.x + 10, pu.y + 10, "❤️ +1 HEALTH", "#ff4444");
+                showCombo("❤️ HEALED!");
+              } else {
+                showScorePopup(pu.x + 10, pu.y + 10, "FULL HP!", "#4caf50");
+                pu.collected = false; // Don't consume if already full
+                pu.respawnTimer = 0;
+              }
             } else if (pu.type === "turbo") {
               turboActive = true;
               turboTimer = 300; // 5 seconds at 60fps
-              showScorePopup(pu.x + 10, pu.y + 10, "🚀 TURBO!", "#ff4444");
+              showScorePopup(pu.x + 10, pu.y + 10, "🚀 TURBO!", "#4fc3f7");
               showCombo("TURBO MODE!");
-            } else {
-              score += 10;
-              showScorePopup(pu.x + 10, pu.y + 10, "⭐ +10", "#ffd93d");
-            }
-            // Check mission completion
-            if (currentMission && currentMission.type === "powerups") {
-              missionProgress = currentMission.progress();
-              if (missionProgress >= missionTarget) {
-                setTimeout(nextLevel, 500);
-              }
             }
           }
         }
@@ -1772,55 +1922,59 @@
             }
           }
 
-          // Thief AI - Among Us style behavior
+          // Thief AI - Simple and predictable behavior
           const distToPlayer = Math.abs(P.x - thief.x);
-          const canSeePlayer =
-            distToPlayer < 600 && Math.abs(P.y - thief.y) < 100;
-
-          if (canSeePlayer) {
-            thief.lastSeen = 60; // Remember player for 1 second
-            // Chase player if they have packages
-            if (P.packages > 0) {
-              thief.suspicious = true;
-              thief.suspiciousTime = 120;
-              if (P.x > thief.x) {
-                thief.vx = thief.speed;
-                thief.right = true;
-              } else {
-                thief.vx = -thief.speed;
-                thief.right = false;
+          const heightDiff = P.y - thief.y; // Negative if player is above
+          
+          // Apply friction to slow down
+          thief.vx *= 0.9;
+          
+          // Only chase if player has packages and is nearby
+          if (P.packages > 0 && distToPlayer < 400) {
+            thief.suspicious = true;
+            thief.suspiciousTime = 60;
+            
+            // Move toward player at steady speed
+            if (P.x > thief.x + 20) {
+              thief.vx = thief.speed;
+              thief.right = true;
+            } else if (P.x < thief.x - 20) {
+              thief.vx = -thief.speed;
+              thief.right = false;
+            }
+            
+            // Jump to chase player if they're above (on platform) or to avoid obstacles
+            if (thief.grounded) {
+              // Jump if player is significantly above
+              if (heightDiff < -50 && distToPlayer < 150) {
+                thief.vy = -10; // Jump!
+                thief.grounded = false;
               }
-              // Jump to reach player
-              if (thief.grounded && Math.random() > 0.95) {
-                thief.vy = JUMP * 0.8;
-              }
-            } else {
-              // No packages? Grinch is bored - wander away slowly
-              thief.suspicious = false;
-              // Move away from player
-              if (P.x > thief.x) {
-                thief.vx = -thief.speed * 0.5; // Walk away
-                thief.right = false;
-              } else {
-                thief.vx = thief.speed * 0.5;
-                thief.right = true;
+              // Random jump while chasing to be more aggressive
+              else if (Math.random() < 0.01 && distToPlayer < 200) {
+                thief.vy = -8; // Smaller hop
+                thief.grounded = false;
               }
             }
-          } else if (thief.lastSeen > 0) {
-            // Continue chasing briefly after losing sight
-            thief.lastSeen--;
-            if (P.x > thief.x) {
-              thief.vx = thief.speed * 0.7;
-            } else {
-              thief.vx = -thief.speed * 0.7;
-            }
-          } else {
-            // Wander randomly
+          } else if (P.packages === 0) {
+            // No packages - Grinch ignores player completely
             thief.suspicious = false;
-            if (Math.random() > 0.98) {
-              thief.vx = (Math.random() - 0.5) * thief.speed;
+            thief.vx *= 0.8; // Slow to a stop
+          } else {
+            // Player too far - wander slowly
+            thief.suspicious = false;
+            if (thief.grounded && Math.abs(thief.vx) < 0.5) {
+              // Occasionally pick a direction to wander
+              if (Math.random() > 0.99) {
+                thief.vx = (Math.random() > 0.5 ? 1 : -1) * thief.speed * 0.4;
+                thief.right = thief.vx > 0;
+              }
             }
-            thief.vx *= 0.95; // Friction
+            // Occasional idle hop while wandering
+            if (thief.grounded && Math.random() < 0.003) {
+              thief.vy = -6;
+              thief.grounded = false;
+            }
           }
 
           // Steal packages from player
@@ -1903,15 +2057,14 @@
             ice.x = Math.random() * WORLD_W;
           }
 
-          // Collision
+          // Collision with ice - damages health
           if (
             P.x < ice.x + ice.size &&
             P.x + P.w > ice.x &&
             P.y < ice.y + ice.size &&
             P.y + P.h > ice.y
           ) {
-            P.stamina -= 20;
-            score = Math.max(0, score - 25);
+            P.health--; // Lose a heart
             P.vx = P.x > ice.x ? 5 : -5;
             P.vy = -8;
             combo = 0; // Reset combo on hit
@@ -1919,27 +2072,36 @@
             createParticles(
               ice.x + ice.size / 2,
               ice.y + ice.size / 2,
-              "#87ceeb",
-              15
+              "#ff4444",
+              20
             );
-            screenShake = 2; // Minimal shake intensity
+            screenShake = 5;
             ice.y = -100 - Math.random() * 200;
             ice.x = Math.random() * WORLD_W;
+            
+            // Flash screen red briefly
+            showCombo("❤️ -1 HEALTH!");
 
-            if (P.stamina <= 0) {
-              P.stamina = 0;
+            if (P.health <= 0) {
+              P.health = 0;
               endGame();
             }
           }
         }
 
-        // Snow
+        // Snow - improved falling effect with varied sizes and wind
         for (const s of snow) {
           s.y += s.s;
-          s.x += Math.sin(Date.now() / 1000 + s.x) * 0.3;
+          // Wind effect varies by height - upper snow moves more
+          const windStrength = 0.3 + (1 - s.y / H) * 0.2;
+          s.x += Math.sin(Date.now() / 800 + s.x * 0.5) * windStrength;
+          // Slight wobble
+          s.x += Math.cos(Date.now() / 400 + s.y) * 0.1;
           if (s.y > H) {
-            s.y = -5;
+            s.y = -5 - Math.random() * 20;
             s.x = Math.random() * WORLD_W;
+            s.r = 1 + Math.random() * 3; // Vary size on respawn
+            s.s = 0.3 + Math.random() * 1.2; // Vary speed
           }
         }
 
@@ -1959,59 +2121,179 @@
       }
 
       function draw() {
-        // Sky
+        // Sky with aurora effect
         const sky = ctx.createLinearGradient(0, 0, 0, H);
         sky.addColorStop(0, "#0a0a20");
-        sky.addColorStop(1, "#1a2a4a");
+        sky.addColorStop(0.3, "#1a1a3e");
+        sky.addColorStop(0.7, "#1a2a4a");
+        sky.addColorStop(1, "#2a3a5a");
         ctx.fillStyle = sky;
         ctx.fillRect(0, 0, W, H);
 
-        // Stars (twinkling)
+        // Aurora borealis effect
         const time = Date.now() / 1000;
-        for (let i = 0; i < 40; i++) {
-          const twinkle = 0.3 + Math.sin(time * 2 + i) * 0.2;
+        ctx.save();
+        ctx.globalAlpha = 0.15;
+        for (let i = 0; i < 3; i++) {
+          const waveOffset = Math.sin(time * 0.5 + i) * 30;
+          const grad = ctx.createLinearGradient(0, 50 + i * 20, W, 100 + i * 20);
+          grad.addColorStop(0, "transparent");
+          grad.addColorStop(0.3, i === 0 ? "#00ff88" : i === 1 ? "#00ffcc" : "#88ffcc");
+          grad.addColorStop(0.7, i === 0 ? "#00ccff" : i === 1 ? "#00ff88" : "#00ffcc");
+          grad.addColorStop(1, "transparent");
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.moveTo(0, 60 + waveOffset);
+          for (let x = 0; x <= W; x += 20) {
+            ctx.lineTo(x, 60 + Math.sin(x * 0.01 + time + i) * 15 + waveOffset);
+          }
+          ctx.lineTo(W, 120);
+          ctx.lineTo(0, 120);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+
+        // Stars (twinkling) - more stars with varied sizes
+        for (let i = 0; i < 60; i++) {
+          const twinkle = 0.2 + Math.sin(time * 2 + i * 1.5) * 0.3;
+          const size = 0.5 + (i % 3) * 0.5;
           ctx.fillStyle = `rgba(255,255,255,${twinkle})`;
           ctx.beginPath();
           ctx.arc(
-            (i * 61) % W,
-            (i * 37) % (H * 0.5),
-            1 + Math.sin(time + i) * 0.5,
+            (i * 61 + Math.sin(i) * 20) % W,
+            (i * 37) % (H * 0.4),
+            size + Math.sin(time + i) * 0.3,
             0,
             Math.PI * 2
           );
           ctx.fill();
         }
 
+        // Distant mountains (parallax layer 1 - slowest)
+        ctx.fillStyle = "#1a2040";
+        ctx.beginPath();
+        ctx.moveTo(0, H * 0.7);
+        for (let x = 0; x <= W + 100; x += 100) {
+          const worldX = x + camX * 0.1; // Slow parallax
+          const peakHeight = 80 + Math.sin(worldX * 0.005) * 40 + Math.cos(worldX * 0.003) * 30;
+          ctx.lineTo(x, H * 0.7 - peakHeight);
+        }
+        ctx.lineTo(W, H);
+        ctx.lineTo(0, H);
+        ctx.closePath();
+        ctx.fill();
+
+        // Mid mountains (parallax layer 2)
+        ctx.fillStyle = "#252850";
+        ctx.beginPath();
+        ctx.moveTo(0, H * 0.75);
+        for (let x = 0; x <= W + 80; x += 80) {
+          const worldX = x + camX * 0.25;
+          const peakHeight = 60 + Math.sin(worldX * 0.008) * 35 + Math.cos(worldX * 0.012) * 25;
+          ctx.lineTo(x, H * 0.75 - peakHeight);
+        }
+        ctx.lineTo(W, H);
+        ctx.lineTo(0, H);
+        ctx.closePath();
+        ctx.fill();
+
+        // Near hills with trees (parallax layer 3)
+        ctx.fillStyle = "#303060";
+        ctx.beginPath();
+        ctx.moveTo(0, GROUND - 30);
+        for (let x = 0; x <= W + 60; x += 60) {
+          const worldX = x + camX * 0.4;
+          const hillHeight = 30 + Math.sin(worldX * 0.015) * 20;
+          ctx.lineTo(x, GROUND - hillHeight);
+        }
+        ctx.lineTo(W, GROUND);
+        ctx.lineTo(0, GROUND);
+        ctx.closePath();
+        ctx.fill();
+
+        // Distant pine trees silhouettes
+        ctx.fillStyle = "#202040";
+        for (let i = 0; i < 15; i++) {
+          const treeX = ((i * 200 + 50) - camX * 0.3) % (W + 200) - 100;
+          const treeH = 40 + (i % 3) * 15;
+          ctx.beginPath();
+          ctx.moveTo(treeX, GROUND - 50);
+          ctx.lineTo(treeX - 15, GROUND - 50 + treeH);
+          ctx.lineTo(treeX + 15, GROUND - 50 + treeH);
+          ctx.closePath();
+          ctx.fill();
+        }
+
         // Moon (with glow)
         const moonGrad = ctx.createRadialGradient(
-          W - 60,
-          50,
+          W - 80,
+          60,
           0,
-          W - 60,
-          50,
-          40
+          W - 80,
+          60,
+          50
         );
-        moonGrad.addColorStop(0, "#fff");
-        moonGrad.addColorStop(0.5, "#eee");
-        moonGrad.addColorStop(1, "rgba(238,238,238,0)");
+        moonGrad.addColorStop(0, "#fffde8");
+        moonGrad.addColorStop(0.4, "#fffde8");
+        moonGrad.addColorStop(0.7, "rgba(255,253,232,0.3)");
+        moonGrad.addColorStop(1, "rgba(255,253,232,0)");
         ctx.fillStyle = moonGrad;
         ctx.beginPath();
-        ctx.arc(W - 60, 50, 40, 0, Math.PI * 2);
+        ctx.arc(W - 80, 60, 50, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = "#eee";
+        ctx.fillStyle = "#fffde8";
         ctx.beginPath();
-        ctx.arc(W - 60, 50, 30, 0, Math.PI * 2);
+        ctx.arc(W - 80, 60, 28, 0, Math.PI * 2);
+        ctx.fill();
+        // Moon craters
+        ctx.fillStyle = "rgba(200,200,180,0.3)";
+        ctx.beginPath();
+        ctx.arc(W - 90, 55, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(W - 72, 68, 4, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.save();
         // Apply camera transformation
         ctx.translate(-camX, 0);
 
-        // Ground FIRST
-        ctx.fillStyle = "#f5f5f5";
+        // Ground with snow texture
+        // Main snow layer
+        const groundGrad = ctx.createLinearGradient(0, GROUND, 0, GROUND + 50);
+        groundGrad.addColorStop(0, "#ffffff");
+        groundGrad.addColorStop(0.2, "#f0f5ff");
+        groundGrad.addColorStop(0.5, "#e0e8f0");
+        groundGrad.addColorStop(1, "#c0d0e0");
+        ctx.fillStyle = groundGrad;
         ctx.fillRect(0, GROUND, WORLD_W, 50);
-        ctx.fillStyle = "#e0e0e0";
-        ctx.fillRect(0, GROUND + 8, WORLD_W, 42);
+        
+        // Snow drifts along the ground (wavy top edge)
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.moveTo(0, GROUND);
+        for (let x = 0; x <= WORLD_W; x += 30) {
+          const driftH = 3 + Math.sin(x * 0.02) * 2 + Math.cos(x * 0.05) * 1.5;
+          ctx.lineTo(x, GROUND - driftH);
+        }
+        ctx.lineTo(WORLD_W, GROUND + 5);
+        ctx.lineTo(0, GROUND + 5);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Sparkle effects on snow
+        ctx.fillStyle = "rgba(255,255,255,0.8)";
+        for (let i = 0; i < 30; i++) {
+          const sparkleX = (i * 101 + Math.sin(Date.now() / 500 + i) * 5) % WORLD_W;
+          const sparkleY = GROUND + 2 + (i % 5) * 3;
+          const sparkleSize = 1 + Math.sin(Date.now() / 300 + i * 2) * 0.5;
+          if (sparkleSize > 0.8) {
+            ctx.beginPath();
+            ctx.arc(sparkleX, sparkleY, sparkleSize, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
 
         // Background buildings
         ctx.fillStyle = "#2c3e50";
@@ -2251,7 +2533,22 @@
 
         // Power-ups
         for (const pu of powerUps) {
-          if (!pu.collected) {
+          // Show faded version when respawning
+          if (pu.collected && pu.respawnTimer > 0) {
+            // Show faded outline to indicate where powerup will respawn
+            const fadeProgress = 1 - (pu.respawnTimer / 600);
+            if (fadeProgress > 0.5) { // Only show when more than halfway respawned
+              ctx.save();
+              ctx.translate(pu.x + 15, pu.y + 15);
+              ctx.globalAlpha = (fadeProgress - 0.5) * 0.5; // Fade in
+              ctx.strokeStyle = pu.type === "health" ? "#ff4444" : "#4fc3f7";
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.arc(0, 0, 14, 0, Math.PI * 2);
+              ctx.stroke();
+              ctx.restore();
+            }
+          } else if (!pu.collected) {
             pu.rot += 0.03;
             ctx.save();
             ctx.translate(pu.x + 15, pu.y + 15);
@@ -2259,15 +2556,13 @@
             const pulse = 0.85 + Math.sin(Date.now() / 200) * 0.15;
             ctx.globalAlpha = pulse;
             // Different colors for each powerup type
-            if (pu.type === "stamina") {
-              ctx.fillStyle = "#4fc3f7";
-            } else if (pu.type === "speed") {
-              ctx.fillStyle = "#ffd93d";
+            if (pu.type === "health") {
+              ctx.fillStyle = "#ff4444"; // Red for health
             } else {
-              // Turbo - fiery orange/red
-              ctx.fillStyle = "#ff6600";
+              // Turbo - blue
+              ctx.fillStyle = "#4fc3f7";
             }
-            // Larger circle
+            // Circle
             ctx.beginPath();
             ctx.arc(0, 0, 14, 0, Math.PI * 2);
             ctx.fill();
@@ -2275,15 +2570,13 @@
             ctx.strokeStyle = "#fff";
             ctx.lineWidth = 2;
             ctx.stroke();
-            // Larger icons
+            // Icons
             ctx.fillStyle = "#fff";
             ctx.font = "bold 18px sans-serif";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
-            // Different icons for each type
-            let icon = "⚡";
-            if (pu.type === "speed") icon = "★";
-            else if (pu.type === "turbo") icon = "🔥";
+            let icon = "❤️"; // Heart for health
+            if (pu.type === "turbo") icon = "🚀"; // Rocket for turbo
             ctx.fillText(icon, 0, 1);
             ctx.restore();
           }
@@ -2511,19 +2804,33 @@
           ctx.fillRect(2, 12, 3, 8);
           ctx.restore();
           
-          // Santa hat (stolen!) - tip trails behind when moving, straight when stationary
-          const grinchHatOffset = Math.abs(thief.vx) > 0.5 ? (thief.vx > 0 ? -12 : 12) : 0;
+          // Santa hat (stolen!) - tip trails behind when moving with wave animation
+          const grinchMoving = Math.abs(thief.vx) > 0.5;
+          const grinchSpeed = Math.abs(thief.vx);
+          const grinchWaveTime = Date.now() / 100;
+          const grinchWaveAmp = grinchMoving ? Math.min(grinchSpeed * 0.6, 3) : 0;
+          const grinchWaveOffset = Math.sin(grinchWaveTime) * grinchWaveAmp;
+          const grinchHatOffset = grinchMoving ? (thief.vx > 0 ? -10 - grinchWaveAmp : 10 + grinchWaveAmp) : 0;
+          const grinchHatTipY = grinchMoving ? -22 + grinchWaveOffset : -24;
+          
           ctx.fillStyle = "#c62828";
           ctx.beginPath();
           ctx.moveTo(tx + thief.w / 2 - 10, ty - 4);
           ctx.lineTo(tx + thief.w / 2 + 10, ty - 4);
-          ctx.lineTo(tx + thief.w / 2 + grinchHatOffset, ty - 24); // Tip slants opposite to movement
+          if (grinchMoving) {
+            ctx.quadraticCurveTo(
+              tx + thief.w / 2 + grinchHatOffset * 0.5, ty - 14 + grinchWaveOffset * 0.5,
+              tx + thief.w / 2 + grinchHatOffset, ty + grinchHatTipY
+            );
+          } else {
+            ctx.lineTo(tx + thief.w / 2 + grinchHatOffset, ty + grinchHatTipY);
+          }
           ctx.closePath();
           ctx.fill();
           ctx.fillStyle = "#fff";
           ctx.fillRect(tx + thief.w / 2 - 12, ty - 6, 24, 5);
           ctx.beginPath();
-          ctx.arc(tx + thief.w / 2 + grinchHatOffset, ty - 24, 4, 0, Math.PI * 2); // Pom-pom follows tip
+          ctx.arc(tx + thief.w / 2 + grinchHatOffset, ty + grinchHatTipY, 4, 0, Math.PI * 2); // Pom-pom follows tip
           ctx.fill();
           
           // Reset alpha after squish effect
@@ -2696,22 +3003,37 @@
         ctx.fill();
         ctx.fillRect(px + 8, py + 4, 20, 8);
         
-        // Santa hat - tip trails behind when moving, straight when stationary
-        // Since we're inside a flip transform, always use -12 when moving (trails behind visually)
+        // Santa hat - tip trails behind when moving with wave animation
+        // Since we're inside a flip transform, always use negative offset when moving (trails behind visually)
         // The flip transform will make it appear correct for both directions
         const isMoving = Math.abs(P.vx) > 0.5;
-        const hatTipOffset = isMoving ? -12 : 0; // Always trail behind (left in local coords)
+        const speed = Math.abs(P.vx);
+        const waveTime = Date.now() / 100;
+        // Wave amplitude increases with speed
+        const waveAmplitude = isMoving ? Math.min(speed * 0.8, 4) : 0;
+        const waveOffset = Math.sin(waveTime) * waveAmplitude;
+        const hatTipOffset = isMoving ? -12 - waveAmplitude : 0; // Trail behind with wave
+        const hatTipY = isMoving ? -18 + waveOffset : -20; // Vertical wave motion
+        
         ctx.fillStyle = "#c62828";
         ctx.beginPath();
         ctx.moveTo(px + 8, py - 2);
         ctx.lineTo(px + 28, py - 2);
-        ctx.lineTo(px + 18 + hatTipOffset, py - 20); // Tip slants opposite to movement
+        // Add a curve to the hat when moving for a flowing effect
+        if (isMoving) {
+          ctx.quadraticCurveTo(
+            px + 20 + hatTipOffset * 0.5, py - 10 + waveOffset * 0.5,
+            px + 18 + hatTipOffset, py + hatTipY
+          );
+        } else {
+          ctx.lineTo(px + 18 + hatTipOffset, py + hatTipY);
+        }
         ctx.closePath();
         ctx.fill();
         ctx.fillStyle = "#fff";
         ctx.fillRect(px + 6, py - 4, 24, 5);
         ctx.beginPath();
-        ctx.arc(px + 18 + hatTipOffset, py - 20, 5, 0, Math.PI * 2); // Pom-pom follows tip
+        ctx.arc(px + 18 + hatTipOffset, py + hatTipY, 5, 0, Math.PI * 2); // Pom-pom follows tip
         ctx.fill();
         
         // Eyes
